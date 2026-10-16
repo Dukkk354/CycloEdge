@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="CycloEdge Bike Computer" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Monas Circuit Loop (Jakarta Pusat)</name>
+    <desc>Rute gowes mengelilingi Monumen Nasional Jakarta</desc>
+  </metadata>
+  <trk>
+    <name>Monas Circuit Loop</name>
+    <trkseg>
+      <trkpt lat="-6.1754" lon="106.8272"><ele>16.0</ele></trkpt>
+      <trkpt lat="-6.1730" lon="106.8272"><ele>16.2</ele></trkpt>
+      <trkpt lat="-6.1715" lon="106.8272"><ele>16.5</ele></trkpt>
+      <trkpt lat="-6.1715" lon="106.8295"><ele>16.3</ele></trkpt>
+      <trkpt lat="-6.1715" lon="106.8315"><ele>16.0</ele></trkpt>
+      <trkpt lat="-6.1740" lon="106.8315"><ele>15.8</ele></trkpt>
+      <trkpt lat="-6.1765" lon="106.8315"><ele>15.7</ele></trkpt>
+      <trkpt lat="-6.1790" lon="106.8315"><ele>15.5</ele></trkpt>
+      <trkpt lat="-6.1790" lon="106.8295"><ele>15.7</ele></trkpt>
+      <trkpt lat="-6.1790" lon="106.8272"><ele>16.0</ele></trkpt>
+      <trkpt lat="-6.1754" lon="106.8272"><ele>16.0</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
+

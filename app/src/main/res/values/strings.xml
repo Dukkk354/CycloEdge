@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">CycloEdge</string>
+    <string name="recording_notification_channel_name">Perekaman Aktivitas Sepeda</string>
+    <string name="recording_notification_channel_desc">Menampilkan status telemetri langsung saat merekam di latar belakang</string>
+    <string name="ride_in_progress">Sedang Bersepeda...</string>
+    <string name="btn_start">START</string>
+    <string name="btn_pause">PAUSE</string>
+    <string name="btn_resume">RESUME</string>
+    <string name="btn_stop">STOP</string>
+    <string name="btn_lap">+ LAP</string>
+    <string name="btn_lock">LOCK</string>
+    <string name="btn_unlock">UNLOCK</string>
+</resources>
+
