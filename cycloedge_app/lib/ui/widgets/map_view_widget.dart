@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../models/route_data.dart';
 
+enum MapThemeType { light, satellite, dark }
+
 class MapViewWidget extends StatefulWidget {
   final LatLng? currentPosition;
   final double heading;
@@ -27,7 +29,7 @@ class MapViewWidget extends StatefulWidget {
 
 class _MapViewWidgetState extends State<MapViewWidget> {
   final MapController _mapController = MapController();
-  bool _useDarkMap = true;
+  MapThemeType _currentTheme = MapThemeType.dark;
   bool _followRider = true;
 
   @override
@@ -55,21 +57,31 @@ class _MapViewWidgetState extends State<MapViewWidget> {
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.all(40),
+          padding: const EdgeInsets.all(32),
         ),
       );
     }
   }
 
+  String _getTileUrl() {
+    switch (_currentTheme) {
+      case MapThemeType.light:
+        return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+      case MapThemeType.satellite:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      case MapThemeType.dark:
+        return 'https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Default initial location: rider position or Bandung / Lembang default
     final initialCenter = widget.currentPosition ??
         (widget.gpxRoute?.startingPoint ?? const LatLng(-6.8016, 107.6186));
 
     final polylines = <Polyline>[];
 
-    // 1. GPX Planned Route (Electric Cyan)
+    // GPX Planned Route (Cyan)
     if (widget.gpxRoute != null && widget.gpxRoute!.isNotEmpty) {
       polylines.add(
         Polyline(
@@ -80,7 +92,7 @@ class _MapViewWidgetState extends State<MapViewWidget> {
       );
     }
 
-    // 2. Rider Breadcrumbs (Neon Green)
+    // Live Rider Breadcrumbs (Electric Green)
     if (widget.breadcrumbs.isNotEmpty) {
       polylines.add(
         Polyline(
@@ -94,70 +106,64 @@ class _MapViewWidgetState extends State<MapViewWidget> {
     // Markers
     final markers = <Marker>[];
 
-    // GPX Start & End pins
     if (widget.gpxRoute != null && widget.gpxRoute!.isNotEmpty) {
       final start = widget.gpxRoute!.startingPoint;
       if (start != null) {
         markers.add(
           Marker(
             point: start,
-            width: 32,
-            height: 32,
-            child: const Icon(Icons.play_circle_fill, color: Color(0xFF00E676), size: 28),
+            width: 28,
+            height: 28,
+            child: const Icon(Icons.play_circle_fill, color: Color(0xFF00E676), size: 24),
           ),
         );
       }
-
       final end = widget.gpxRoute!.endingPoint;
       if (end != null) {
         markers.add(
           Marker(
             point: end,
-            width: 32,
-            height: 32,
-            child: const Icon(Icons.flag_circle, color: Color(0xFFFF1744), size: 28),
+            width: 28,
+            height: 28,
+            child: const Icon(Icons.flag_circle, color: Color(0xFFFF1744), size: 24),
           ),
         );
       }
     }
 
-    // Current Rider Marker
+    // Rider Position Marker
     if (widget.currentPosition != null) {
       markers.add(
         Marker(
           point: widget.currentPosition!,
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           child: Transform.rotate(
             angle: (widget.heading * (3.141592653589793 / 180.0)),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Container(
-                  width: 36,
-                  height: 36,
+                  width: 34,
+                  height: 34,
                   decoration: BoxDecoration(
                     color: const Color(0xFF00E5FF).withOpacity(0.25),
                     shape: BoxShape.circle,
                   ),
                 ),
                 Container(
-                  width: 20,
-                  height: 20,
+                  width: 18,
+                  height: 18,
                   decoration: BoxDecoration(
                     color: const Color(0xFF00E5FF),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2.5),
+                    border: Border.all(color: Colors.white, width: 2),
                     boxShadow: const [
-                      BoxShadow(color: Color(0xFF00E5FF), blurRadius: 8),
+                      BoxShadow(color: Color(0xFF00E5FF), blurRadius: 6),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.navigation,
-                  color: Colors.black,
-                  size: 12,
-                ),
+                const Icon(Icons.navigation, color: Colors.black, size: 10),
               ],
             ),
           ),
@@ -165,12 +171,8 @@ class _MapViewWidgetState extends State<MapViewWidget> {
       );
     }
 
-    final tileUrl = _useDarkMap
-        ? 'https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
     return ClipRRect(
-      borderRadius: BorderRadius.circular(widget.isExpanded ? 0 : 16),
+      borderRadius: BorderRadius.circular(widget.isExpanded ? 0 : 12),
       child: Stack(
         children: [
           FlutterMap(
@@ -186,7 +188,7 @@ class _MapViewWidgetState extends State<MapViewWidget> {
             ),
             children: [
               TileLayer(
-                urlTemplate: tileUrl,
+                urlTemplate: _getTileUrl(),
                 userAgentPackageName: 'com.cycloedge.app',
                 maxZoom: 19,
               ),
@@ -195,101 +197,128 @@ class _MapViewWidgetState extends State<MapViewWidget> {
             ],
           ),
 
-          // Map Control Buttons (Floating)
+          // Map Theme Switcher Bar (Terang, Satelit, Gelap) - Exact Preview.html Style
           Positioned(
-            top: 12,
-            right: 12,
-            child: Column(
+            top: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white24, width: 0.8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildThemeButton('Terang', MapThemeType.light),
+                  _buildThemeButton('Satelit', MapThemeType.satellite),
+                  _buildThemeButton('Gelap', MapThemeType.dark),
+                ],
+              ),
+            ),
+          ),
+
+          // Action Floating Buttons (Center & Fit Route & Fullscreen)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildMapButton(
-                  icon: widget.isExpanded ? Icons.fullscreen_exit : Icons.fullscreen,
-                  onPressed: widget.onToggleExpand,
-                  tooltip: widget.isExpanded ? 'Minimize Map' : 'Full Map',
-                ),
-                const SizedBox(height: 8),
-                _buildMapButton(
+                _buildSmallBtn(
                   icon: _followRider ? Icons.gps_fixed : Icons.gps_not_fixed,
-                  iconColor: _followRider ? const Color(0xFF00E5FF) : Colors.white,
+                  iconColor: _followRider ? const Color(0xFF00E5FF) : Colors.white70,
                   onPressed: _centerOnRider,
-                  tooltip: 'Center on Me',
                 ),
                 if (widget.gpxRoute != null && widget.gpxRoute!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _buildMapButton(
+                  const SizedBox(width: 6),
+                  _buildSmallBtn(
                     icon: Icons.alt_route,
+                    iconColor: const Color(0xFF00E5FF),
                     onPressed: _fitRoute,
-                    tooltip: 'Fit GPX Route',
                   ),
                 ],
-                const SizedBox(height: 8),
-                _buildMapButton(
-                  icon: _useDarkMap ? Icons.dark_mode : Icons.light_mode,
-                  onPressed: () => setState(() => _useDarkMap = !_useDarkMap),
-                  tooltip: 'Toggle Map Theme',
+                const SizedBox(width: 6),
+                _buildSmallBtn(
+                  icon: widget.isExpanded ? Icons.fullscreen_exit : Icons.fullscreen,
+                  iconColor: Colors.white,
+                  onPressed: widget.onToggleExpand,
                 ),
               ],
             ),
           ),
 
-          // Route info badge if GPX loaded
-          if (widget.gpxRoute != null && widget.gpxRoute!.isNotEmpty)
-            Positioned(
-              left: 12,
-              bottom: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.85),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.route, color: Color(0xFF00E5FF), size: 16),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${widget.gpxRoute!.name} • ${widget.gpxRoute!.totalDistanceKm.toStringAsFixed(1)} km',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+          // Route info badge in bottom-left
+          Positioned(
+            left: 8,
+            bottom: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.82),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white24, width: 0.8),
+              ),
+              child: Text(
+                widget.gpxRoute != null && widget.gpxRoute!.isNotEmpty
+                    ? 'RUTE: ${widget.gpxRoute!.name.toUpperCase()} (${widget.gpxRoute!.totalDistanceKm.toStringAsFixed(1)} KM)'
+                    : 'RUTE: SIAP GOWES / IMPORT GPX',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMapButton({
+  Widget _buildThemeButton(String label, MapThemeType theme) {
+    final isSelected = _currentTheme == theme;
+    return GestureDetector(
+      onTap: () => setState(() => _currentTheme = theme),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : Colors.white70,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallBtn({
     required IconData icon,
+    required Color iconColor,
     required VoidCallback onPressed,
-    Color iconColor = Colors.white,
-    String? tooltip,
   }) {
     return Container(
-      width: 38,
-      height: 38,
+      width: 30,
+      height: 30,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E).withOpacity(0.92),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white24, width: 1),
-        boxShadow: const [
-          BoxShadow(color: Colors.black45, blurRadius: 4, offset: Offset(0, 2)),
-        ],
+        color: Colors.black.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.white24, width: 0.8),
       ),
       child: IconButton(
-        iconSize: 18,
         padding: EdgeInsets.zero,
+        iconSize: 16,
         icon: Icon(icon, color: iconColor),
         onPressed: onPressed,
-        tooltip: tooltip,
       ),
     );
   }
 }
-
