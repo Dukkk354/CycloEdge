@@ -138,8 +138,8 @@
 
     /* Landscape dimensions */
     .cockpit-container.landscape {
-      width: 760px;
-      height: 420px;
+      width: 840px;
+      height: 450px;
     }
 
     /* Mobile Phone Real-Screen Mode (e.g. iPhone) */
@@ -241,7 +241,7 @@
     }
 
     .landscape .map-area {
-      flex: 1;
+      flex: 1.6;
       height: 100%;
     }
 
@@ -439,7 +439,7 @@
     }
 
     .landscape .metric-grid {
-      flex: 1.2;
+      flex: 1;
     }
 
     /* Action Bar */
@@ -788,9 +788,10 @@
       [-6.8240, 107.6190], [-6.8120, 107.6175]
     ];
 
-    // Map Layers (100% Free, Zero API Key)
-    let osmLayer = null;
+    // Map Layers (100% Free, Zero API Key, Fast & Never Blocked)
+    let lightLayer = null;
     let satelliteLayer = null;
+    let darkLayer = null;
     let currentMapTheme = 'light';
 
     function initMap() {
@@ -803,14 +804,21 @@
           attributionControl: false
         }).setView([initialLat, initialLon], 15);
 
-        // Standard Clear OpenStreetMap Layer (Default Bright Mode)
-        osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19
+        // High-speed Unblocked CartoDB Voyager Layer (Terang / Bright Mode)
+        lightLayer = L.tileLayer('https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd'
         }).addTo(leafletMap);
 
         // High-res Esri Satellite Layer (100% Free, No API Key)
         satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
           maxZoom: 19
+        });
+
+        // Native CartoDB Dark Matter Layer (Gelap / Pure OLED Dark Mode)
+        darkLayer = L.tileLayer('https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          subdomains: 'abcd'
         });
 
         const riderIcon = L.divIcon({
@@ -843,21 +851,20 @@
       if (!leafletMap) return;
       currentMapTheme = theme;
       const mapAreaEl = document.getElementById('mapArea');
+      mapAreaEl.classList.remove('dark-map-mode');
+
+      if (leafletMap.hasLayer(lightLayer)) leafletMap.removeLayer(lightLayer);
+      if (leafletMap.hasLayer(satelliteLayer)) leafletMap.removeLayer(satelliteLayer);
+      if (leafletMap.hasLayer(darkLayer)) leafletMap.removeLayer(darkLayer);
 
       if (theme === 'satellite') {
-        mapAreaEl.classList.remove('dark-map-mode');
-        if (leafletMap.hasLayer(osmLayer)) leafletMap.removeLayer(osmLayer);
-        if (!leafletMap.hasLayer(satelliteLayer)) satelliteLayer.addTo(leafletMap);
+        satelliteLayer.addTo(leafletMap);
         if (activePolyline) activePolyline.setStyle({ color: '#00ffff' });
       } else if (theme === 'dark') {
-        mapAreaEl.classList.add('dark-map-mode');
-        if (leafletMap.hasLayer(satelliteLayer)) leafletMap.removeLayer(satelliteLayer);
-        if (!leafletMap.hasLayer(osmLayer)) osmLayer.addTo(leafletMap);
+        darkLayer.addTo(leafletMap);
         if (activePolyline) activePolyline.setStyle({ color: '#00d4ff' });
       } else { // 'light' (default)
-        mapAreaEl.classList.remove('dark-map-mode');
-        if (leafletMap.hasLayer(satelliteLayer)) leafletMap.removeLayer(satelliteLayer);
-        if (!leafletMap.hasLayer(osmLayer)) osmLayer.addTo(leafletMap);
+        lightLayer.addTo(leafletMap);
         if (activePolyline) activePolyline.setStyle({ color: '#0066ff' });
       }
     }
