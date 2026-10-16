@@ -29,9 +29,13 @@ jobs:
             echo "dir=." >> $GITHUB_OUTPUT
           fi
 
-      - name: Install Dependencies
+      - name: Install Dependencies & Setup Pods
         working-directory: ${{ steps.app-dir.outputs.dir }}
-        run: flutter pub get
+        run: |
+          flutter pub get
+          cd ios
+          pod install --repo-update
+          cd ..
 
       - name: Build iOS Application (Release, Unsigned)
         working-directory: ${{ steps.app-dir.outputs.dir }}

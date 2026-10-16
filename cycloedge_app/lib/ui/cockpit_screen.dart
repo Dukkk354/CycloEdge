@@ -612,7 +612,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   /// Pick GPX file from device filesystem
   Future<void> _pickGpxFile() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
       );
 
