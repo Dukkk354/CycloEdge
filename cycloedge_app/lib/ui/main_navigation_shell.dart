@@ -8,6 +8,7 @@ import '../services/location_service.dart';
 import '../services/offline_map_service.dart';
 import '../services/profile_service.dart';
 import '../services/strava_service.dart';
+import '../services/weather_service.dart';
 import 'cockpit_screen.dart';
 import 'home/home_screen.dart';
 import 'profile/profile_screen.dart';
@@ -21,6 +22,7 @@ class MainNavigationShell extends StatefulWidget {
   final CrashDetectionService? crashDetectionService;
   final OfflineMapService? offlineMapService;
   final AudioCueService? audioCueService;
+  final WeatherService? weatherService;
 
   const MainNavigationShell({
     super.key,
@@ -32,6 +34,7 @@ class MainNavigationShell extends StatefulWidget {
     this.crashDetectionService,
     this.offlineMapService,
     this.audioCueService,
+    this.weatherService,
   });
 
   @override
@@ -123,6 +126,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       stravaService: widget.stravaService,
       crashDetectionService: widget.crashDetectionService,
       offlineMapService: widget.offlineMapService,
+      weatherService: widget.weatherService,
     );
   }
 

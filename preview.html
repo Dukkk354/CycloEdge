@@ -697,6 +697,17 @@
         <!-- Map View with Leaflet Dynamic OpenStreetMap -->
         <div class="map-area" id="mapArea">
           <div id="leafletMap"></div>
+          <!-- Floating Live Wind Radar Badge -->
+          <div class="wind-badge" id="windBadge" onclick="openWindModal()" style="position: absolute; top: 10px; left: 10px; z-index: 500; background: rgba(20,20,22,0.92); border: 1px solid #ff1744; border-radius: 8px; padding: 4px 8px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+            <div id="windArrow" style="display: inline-block; transform: rotate(180deg); font-size: 13px;">🧭</div>
+            <div style="display: flex; flex-direction: column;">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span id="windSpeedTxt" style="font-size: 11px; font-weight: 900; color: #ff1744;">12 km/h</span>
+                <span id="windTempTxt" style="font-size: 10px; color: #ccc;">28°C</span>
+              </div>
+              <span id="windTypeTxt" style="font-size: 8px; color: #888; font-weight: 700;">Headwind (Lawan)</span>
+            </div>
+          </div>
           <!-- Map Style Switcher (Terang, Satelit, Gelap) -->
           <div class="map-theme-toggle" id="mapThemeToggle">
             <button class="map-theme-btn active" data-theme="light">Terang</button>
@@ -908,6 +919,62 @@
     </div>
   </div>
 
+  <!-- Live Wind Radar Modal -->
+  <div class="app-modal" id="windModal">
+    <div class="modal-content" style="border: 2px solid #00e5ff; max-width: 380px;">
+      <div class="modal-header">
+        <div class="modal-title" style="color: #00e5ff;">💨 LIVE WIND RADAR (10 MIN AUTO)</div>
+        <button class="modal-close" onclick="closeWindModal()">&times;</button>
+      </div>
+      
+      <!-- Compass Circle Visual -->
+      <div style="display: flex; justify-content: center; margin: 16px 0;">
+        <div style="width: 130px; height: 130px; border-radius: 50%; background: #000; border: 2px solid #333; position: relative; display: flex; align-items: center; justify-content: center;">
+          <span style="position: absolute; top: 4px; font-size: 10px; font-weight: 800; color: #666;">N</span>
+          <span style="position: absolute; bottom: 4px; font-size: 10px; font-weight: 800; color: #666;">S</span>
+          <span style="position: absolute; left: 6px; font-size: 10px; font-weight: 800; color: #666;">W</span>
+          <span style="position: absolute; right: 6px; font-size: 10px; font-weight: 800; color: #666;">E</span>
+          <div style="font-size: 24px;">🚴</div>
+          <div id="modalWindArrow" style="position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-start; padding-top: 6px; transform: rotate(180deg); transition: transform 0.5s ease;">
+            <span style="font-size: 20px; color: #ff1744;">⬆️</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #888;">Tipe Angin:</span>
+          <span id="modalWindType" style="color: #ff1744; font-weight: 800;">Headwind (Lawan)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #888;">Kecepatan Angin:</span>
+          <span id="modalWindSpeed" style="font-weight: 800;">12 km/h</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #888;">Hembusan Maks (Gusts):</span>
+          <span id="modalWindGusts" style="color: #ffb300; font-weight: 800;">18 km/h</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #888;">Arah Derajat Tiupan:</span>
+          <span id="modalWindDeg" style="color: #ccc; font-weight: 800;">184° (Selatan)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: #888;">Suhu Udara:</span>
+          <span id="modalWindTemp" style="color: #00e5ff; font-weight: 800;">28.5°C</span>
+        </div>
+      </div>
+
+      <div style="font-size: 11px; color: #666; margin-top: 14px; border-top: 1px solid #222; padding-top: 8px;">
+        📡 Sumber: <strong>Open-Meteo Weather API</strong>. Otomatis di-fetch tiap 10 menit saat GPS berpindah.
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="sim-btn" onclick="fetchLiveWind(true)" style="flex: 1; background: #00e5ff; color: #000; font-weight: 800; padding: 10px;">🔄 Refresh Sekarang</button>
+        <button class="sim-btn" onclick="closeWindModal()" style="padding: 10px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Leaflet Map JS Library -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -1070,6 +1137,7 @@
 
         // Load Default Route: GBK Senayan Loop
         loadRoute('GBK Senayan Loop (Jakarta)', sampleGbk, 4.20, 18);
+        if (typeof fetchLiveWind === 'function') fetchLiveWind(true);
 
         // Map Style Switcher (Terang, Satelit, Gelap)
         const themeButtons = document.querySelectorAll('.map-theme-btn');
@@ -1199,11 +1267,16 @@
 
           // Move rider along route coordinates
           if (riderMarker && activeRouteCoords.length > 1) {
+            const prevPt = activeRouteCoords[currentRouteIndex];
             currentRouteIndex = (currentRouteIndex + 1) % activeRouteCoords.length;
             const pt = activeRouteCoords[currentRouteIndex];
             riderMarker.setLatLng(pt);
             if (currentRouteIndex % 5 === 0 && leafletMap) {
               leafletMap.panTo(pt, { animate: true, duration: 0.8 });
+            }
+            if (typeof getBearing === 'function') {
+              currentRiderHeading = getBearing(prevPt[0], prevPt[1], pt[0], pt[1]);
+              updateWindUI();
             }
           }
         }
@@ -1444,6 +1517,12 @@
                 }
 
                 distance += (stepMeters / 1000.0);
+                if (pos.coords.heading !== null && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) {
+                  currentRiderHeading = pos.coords.heading;
+                } else if (typeof getBearing === 'function' && lastLat !== null && lastLon !== null) {
+                  currentRiderHeading = getBearing(lastLat, lastLon, curLat, curLon);
+                }
+                if (typeof updateWindUI === 'function') updateWindUI();
                 lastLat = curLat;
                 lastLon = curLon;
                 lastGpsTimestamp = now;
@@ -1854,6 +1933,172 @@
         alert("Gagal membaca berkas GPX: " + err.message);
       }
     }
+
+    // ==========================================
+    // LIVE WIND & HEADWIND RADAR (OPEN-METEO 10-MIN AUTO)
+    // ==========================================
+    let currentWindData = null;
+    let lastWindFetchTime = 0;
+    let currentRiderHeading = 0; // Degrees (0 = North)
+
+    function openWindModal() {
+      document.getElementById('windModal').classList.add('active');
+      if (!currentWindData) {
+        fetchLiveWind(true);
+      } else {
+        updateWindUI();
+      }
+    }
+
+    function closeWindModal() {
+      document.getElementById('windModal').classList.remove('active');
+    }
+
+    function getBearing(lat1, lon1, lat2, lon2) {
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const lat1Rad = lat1 * Math.PI / 180;
+      const lat2Rad = lat2 * Math.PI / 180;
+      const y = Math.sin(dLon) * Math.cos(lat2Rad);
+      const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+      const brng = Math.atan2(y, x) * 180 / Math.PI;
+      return (brng + 360) % 360;
+    }
+
+    function getCompassDir(deg) {
+      const dirs = ['Utara (N)', 'Timur Laut (NE)', 'Timur (E)', 'Tenggara (SE)', 'Selatan (S)', 'Barat Daya (SW)', 'Barat (W)', 'Barat Laut (NW)'];
+      return dirs[Math.round(((deg % 360) / 45)) % 8];
+    }
+
+    async function fetchLiveWind(force = false) {
+      const now = Date.now();
+      // Strict 10-minute interval throttle unless forced
+      if (!force && currentWindData && (now - lastWindFetchTime < 10 * 60 * 1000)) {
+        updateWindUI();
+        return;
+      }
+
+      // Determine current coordinates
+      let lat = -6.2185;
+      let lon = 106.8020;
+      if (riderMarker) {
+        const latLng = riderMarker.getLatLng();
+        lat = latLng.lat;
+        lon = latLng.lng;
+      } else if (lastLat !== null && lastLon !== null) {
+        lat = lastLat;
+        lon = lastLon;
+      }
+
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&wind_speed_unit=kmh`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const cur = data.current;
+        currentWindData = {
+          speed: cur.wind_speed_10m || 0,
+          direction: cur.wind_direction_10m || 0,
+          gusts: cur.wind_gusts_10m || 0,
+          temp: cur.temperature_2m || 0,
+          time: new Date(cur.time)
+        };
+        lastWindFetchTime = now;
+        updateWindUI();
+      } catch (err) {
+        console.warn('Gagal fetch live wind dari Open-Meteo:', err);
+      }
+    }
+
+    function updateWindUI() {
+      if (!currentWindData) return;
+
+      // Relative wind calculation
+      // direction is meteorological "from where wind blows" (e.g. 180° = South wind blowing towards North)
+      const relAngle = ((currentWindData.direction - currentRiderHeading) % 360 + 360) % 360;
+
+      let typeText = 'Headwind (Lawan)';
+      let badgeColor = '#ff1744';
+      let icon = '⬆️';
+
+      if (currentWindData.speed < 2.0) {
+        typeText = 'Tenang (Calm)';
+        badgeColor = '#00e5ff';
+        icon = '🍃';
+      } else if (relAngle >= 315 || relAngle <= 45) {
+        typeText = 'Headwind (Lawan)';
+        badgeColor = '#ff1744';
+        icon = '⬆️';
+      } else if (relAngle >= 135 && relAngle <= 225) {
+        typeText = 'Tailwind (Dorong)';
+        badgeColor = '#00e676';
+        icon = '⬇️';
+      } else if (relAngle > 45 && relAngle < 135) {
+        typeText = 'Crosswind Kanan';
+        badgeColor = '#ffb300';
+        icon = '↗️';
+      } else {
+        typeText = 'Crosswind Kiri';
+        badgeColor = '#ffb300';
+        icon = '↖️';
+      }
+
+      // Visual arrow indicates wind flow vector relative to rider
+      const arrowRotation = (relAngle + 180) % 360;
+
+      // Update cockpit floating badge
+      const windBadge = document.getElementById('windBadge');
+      if (windBadge) {
+        windBadge.style.borderColor = badgeColor;
+        const arrowEl = document.getElementById('windArrow');
+        if (arrowEl) {
+          arrowEl.textContent = icon;
+          arrowEl.style.transform = `rotate(${arrowRotation}deg)`;
+        }
+        const speedTxt = document.getElementById('windSpeedTxt');
+        if (speedTxt) {
+          speedTxt.textContent = `${Math.round(currentWindData.speed)} km/h`;
+          speedTxt.style.color = badgeColor;
+        }
+        const tempTxt = document.getElementById('windTempTxt');
+        if (tempTxt) {
+          tempTxt.textContent = `${Math.round(currentWindData.temp)}°C`;
+        }
+        const typeTxt = document.getElementById('windTypeTxt');
+        if (typeTxt) {
+          typeTxt.textContent = typeText;
+          typeTxt.style.color = badgeColor;
+        }
+      }
+
+      // Update modal
+      const modalArrow = document.getElementById('modalWindArrow');
+      if (modalArrow) {
+        modalArrow.style.transform = `rotate(${arrowRotation}deg)`;
+        const span = modalArrow.querySelector('span');
+        if (span) {
+          span.textContent = icon;
+          span.style.color = badgeColor;
+        }
+      }
+      const modalType = document.getElementById('modalWindType');
+      if (modalType) {
+        modalType.textContent = typeText;
+        modalType.style.color = badgeColor;
+      }
+      const modalSpeed = document.getElementById('modalWindSpeed');
+      if (modalSpeed) modalSpeed.textContent = `${currentWindData.speed.toFixed(1)} km/h`;
+      const modalGusts = document.getElementById('modalWindGusts');
+      if (modalGusts) modalGusts.textContent = `${currentWindData.gusts.toFixed(1)} km/h`;
+      const modalDeg = document.getElementById('modalWindDeg');
+      if (modalDeg) modalDeg.textContent = `${Math.round(currentWindData.direction)}° (${getCompassDir(currentWindData.direction)})`;
+      const modalTemp = document.getElementById('modalWindTemp');
+      if (modalTemp) modalTemp.textContent = `${currentWindData.temp.toFixed(1)}°C`;
+    }
+
+    // Auto-fetch every 10 minutes (600,000 ms)
+    setInterval(() => {
+      fetchLiveWind(false);
+    }, 10 * 60 * 1000);
 
     // Initialize Leaflet Map
     if (document.readyState === 'loading') {

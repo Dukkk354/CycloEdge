@@ -10,6 +10,7 @@ import 'services/location_service.dart';
 import 'services/offline_map_service.dart';
 import 'services/profile_service.dart';
 import 'services/strava_service.dart';
+import 'services/weather_service.dart';
 import 'ui/main_navigation_shell.dart';
 
 void main() async {
@@ -52,6 +53,7 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
   late final CrashDetectionService _crashDetectionService;
   late final AudioCueService _audioCueService;
   late final OfflineMapService _offlineMapService;
+  late final WeatherService _weatherService;
 
   @override
   void initState() {
@@ -63,6 +65,7 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
     _crashDetectionService = CrashDetectionService(profileService: _profileService);
     _audioCueService = AudioCueService(profileService: _profileService);
     _offlineMapService = OfflineMapService();
+    _weatherService = WeatherService();
     _locationService = LocationService(
       bleService: _bleService,
       profileService: _profileService,
@@ -75,12 +78,14 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
     final telemetry = _locationService.telemetry;
     _crashDetectionService.processTelemetry(telemetry);
     _audioCueService.processTelemetry(telemetry);
+    _weatherService.onPositionUpdate(telemetry.currentPosition, telemetry.heading);
   }
 
   @override
   void dispose() {
     _locationService.removeListener(_onLocationUpdate);
     _locationService.dispose();
+    _weatherService.dispose();
     _crashDetectionService.dispose();
     _audioCueService.dispose();
     _offlineMapService.dispose();
@@ -115,6 +120,7 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
         crashDetectionService: _crashDetectionService,
         offlineMapService: _offlineMapService,
         audioCueService: _audioCueService,
+        weatherService: _weatherService,
       ),
     );
   }

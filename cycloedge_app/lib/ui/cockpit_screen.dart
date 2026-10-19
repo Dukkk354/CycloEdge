@@ -19,11 +19,13 @@ import '../services/location_service.dart';
 import '../services/offline_map_service.dart';
 import '../services/profile_service.dart';
 import '../services/strava_service.dart';
+import '../services/weather_service.dart';
 import 'sensor_modal.dart';
 import 'share/activity_share_screen.dart';
 import 'widgets/elevation_profile_widget.dart';
 import 'widgets/map_view_widget.dart';
 import 'widgets/rain_lock_overlay.dart';
+import 'widgets/wind_radar_widget.dart';
 
 class CockpitScreen extends StatefulWidget {
   final LocationService locationService;
@@ -33,6 +35,7 @@ class CockpitScreen extends StatefulWidget {
   final StravaService? stravaService;
   final CrashDetectionService? crashDetectionService;
   final OfflineMapService? offlineMapService;
+  final WeatherService? weatherService;
 
   const CockpitScreen({
     super.key,
@@ -43,6 +46,7 @@ class CockpitScreen extends StatefulWidget {
     this.stravaService,
     this.crashDetectionService,
     this.offlineMapService,
+    this.weatherService,
   });
 
   @override
@@ -93,6 +97,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
         widget.bleService,
         if (widget.crashDetectionService != null) widget.crashDetectionService!,
         if (widget.offlineMapService != null) widget.offlineMapService!,
+        if (widget.weatherService != null) widget.weatherService!,
       ]),
       builder: (context, _) {
         final telemetry = widget.locationService.telemetry;
@@ -151,15 +156,25 @@ class _CockpitScreenState extends State<CockpitScreen> {
           flex: _showClimbPro ? 30 : 36,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: MapViewWidget(
-              currentPosition: telemetry.currentPosition,
-              heading: telemetry.heading,
-              breadcrumbs: telemetry.breadcrumbs,
-              gpxRoute: _importedRoute,
-              isExpanded: false,
-              onToggleExpand: () {
-                setState(() => _isMapFullscreen = true);
-              },
+            child: Stack(
+              children: [
+                MapViewWidget(
+                  currentPosition: telemetry.currentPosition,
+                  heading: telemetry.heading,
+                  breadcrumbs: telemetry.breadcrumbs,
+                  gpxRoute: _importedRoute,
+                  isExpanded: false,
+                  onToggleExpand: () {
+                    setState(() => _isMapFullscreen = true);
+                  },
+                ),
+                if (widget.weatherService != null)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: WindRadarWidget(weatherService: widget.weatherService!),
+                  ),
+              ],
             ),
           ),
         ),
@@ -206,15 +221,25 @@ class _CockpitScreenState extends State<CockpitScreen> {
             child: Column(
               children: [
                 Expanded(
-                  child: MapViewWidget(
-                    currentPosition: telemetry.currentPosition,
-                    heading: telemetry.heading,
-                    breadcrumbs: telemetry.breadcrumbs,
-                    gpxRoute: _importedRoute,
-                    isExpanded: false,
-                    onToggleExpand: () {
-                      setState(() => _isMapFullscreen = true);
-                    },
+                  child: Stack(
+                    children: [
+                      MapViewWidget(
+                        currentPosition: telemetry.currentPosition,
+                        heading: telemetry.heading,
+                        breadcrumbs: telemetry.breadcrumbs,
+                        gpxRoute: _importedRoute,
+                        isExpanded: false,
+                        onToggleExpand: () {
+                          setState(() => _isMapFullscreen = true);
+                        },
+                      ),
+                      if (widget.weatherService != null)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: WindRadarWidget(weatherService: widget.weatherService!),
+                        ),
+                    ],
                   ),
                 ),
                 if (_showClimbPro)
@@ -344,6 +369,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
             ),
           ),
         ),
+        if (widget.weatherService != null)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: WindRadarWidget(weatherService: widget.weatherService!),
+          ),
       ],
     );
   }
