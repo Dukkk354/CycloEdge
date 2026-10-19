@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/activity_record.dart';
+import '../../models/user_profile.dart';
 import '../../services/activity_service.dart';
 import '../../services/ble_service.dart';
 import '../../services/location_service.dart';
 import '../../services/profile_service.dart';
+import '../../services/strava_service.dart';
 import '../share/activity_share_screen.dart';
 import '../widgets/route_polyline_painter.dart';
 
@@ -14,6 +16,7 @@ class HomeScreen extends StatelessWidget {
   final ProfileService profileService;
   final LocationService locationService;
   final BleService bleService;
+  final StravaService? stravaService;
   final VoidCallback onStartRecord;
 
   const HomeScreen({
@@ -22,6 +25,7 @@ class HomeScreen extends StatelessWidget {
     required this.profileService,
     required this.locationService,
     required this.bleService,
+    this.stravaService,
     required this.onStartRecord,
   });
 
@@ -109,12 +113,22 @@ class HomeScreen extends StatelessWidget {
               // User Greeting Banner
               _buildGreetingCard(profile),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
+
+              // Weekly Distance Goal Progress
+              _buildWeeklyGoalCard(profile, activityService),
+
+              const SizedBox(height: 14),
 
               // Aggregated Stats (Total Distance, Hours, Calories, Sessions)
               _buildStatsOverview(activityService),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
+
+              // Personal Records (PR) Trophy Shelf
+              _buildPersonalRecordsShelf(activityService),
+
+              const SizedBox(height: 18),
 
               // Quick Workout Starter
               _buildQuickStartCard(context, profile),
@@ -285,6 +299,232 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildWeeklyGoalCard(UserProfile profile, ActivityService service) {
+    final goalKm = profile.weeklyGoalKm > 0 ? profile.weeklyGoalKm : 100.0;
+    final currentKm = service.currentWeekDistanceKm;
+    final progress = (currentKm / goalKm).clamp(0.0, 1.0);
+    final percent = (progress * 100).round();
+    final remainingKm = (goalKm - currentKm).clamp(0.0, 9999.0);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF141820), Color(0xFF0F1117)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.track_changes, color: Color(0xFF00E5FF), size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'TARGET MINGGU INI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00E5FF).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$percent%',
+                  style: const TextStyle(
+                    color: Color(0xFF00E5FF),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                currentKm.toStringAsFixed(1),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '/ ${goalKm.toStringAsFixed(0)} km',
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                remainingKm <= 0 ? 'Target Tercapai! 🎉' : 'Sisa ${remainingKm.toStringAsFixed(1)} km',
+                style: TextStyle(
+                  color: remainingKm <= 0 ? const Color(0xFF00E676) : Colors.white60,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.white10,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                remainingKm <= 0 ? const Color(0xFF00E676) : const Color(0xFF00E5FF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonalRecordsShelf(ActivityService service) {
+    final paceMin = service.fastestPaceMinPerKm;
+    final paceStr = paceMin > 0 && paceMin < 900
+        ? '${paceMin.floor()}:${((paceMin - paceMin.floor()) * 60).round().toString().padLeft(2, '0')}/km'
+        : '--:--';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF242424)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.emoji_events, color: Color(0xFFFFB300), size: 18),
+              SizedBox(width: 8),
+              Text(
+                'REKOR PRIBADI (PRs)',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPRTile(
+                  icon: Icons.straighten,
+                  iconColor: const Color(0xFF00E5FF),
+                  title: 'Jarak Terjauh',
+                  value: '${service.longestRideKm.toStringAsFixed(1)} km',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildPRTile(
+                  icon: Icons.speed,
+                  iconColor: const Color(0xFFFF5252),
+                  title: 'Top Speed',
+                  value: '${service.maxSpeedEverKmh.toStringAsFixed(1)} km/h',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPRTile(
+                  icon: Icons.terrain,
+                  iconColor: const Color(0xFF00E676),
+                  title: 'Tanjakan Max',
+                  value: '${service.maxElevationEverM.round()} m',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildPRTile(
+                  icon: Icons.timer,
+                  iconColor: const Color(0xFFFFB300),
+                  title: 'Pace Tercepat',
+                  value: paceStr,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPRTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickStartCard(BuildContext context, profile) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -448,7 +688,11 @@ class HomeScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ActivityShareScreen(activity: act, profile: profile),
+                        builder: (_) => ActivityShareScreen(
+                          activity: act,
+                          profile: profile,
+                          stravaService: stravaService,
+                        ),
                       ),
                     );
                   },
@@ -533,3 +777,4 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
+

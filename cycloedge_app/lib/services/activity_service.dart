@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,6 +21,33 @@ class ActivityService extends ChangeNotifier {
   int get totalCalories =>
       _activities.fold(0, (sum, a) => sum + a.calories);
   int get totalActivities => _activities.length;
+
+  /// Current week distance (Monday to Sunday)
+  double get currentWeekDistanceKm {
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    final mondayMidnight = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+
+    return _activities
+        .where((a) => a.startTime.isAfter(mondayMidnight))
+        .fold(0.0, (sum, a) => sum + a.distanceKm);
+  }
+
+  // Personal Records (PRs)
+  double get longestRideKm =>
+      _activities.fold(0.0, (m, a) => math.max(m, a.distanceKm));
+
+  double get maxSpeedEverKmh =>
+      _activities.fold(0.0, (m, a) => math.max(m, a.maxSpeedKmh));
+
+  double get maxElevationEverM =>
+      _activities.fold(0.0, (m, a) => math.max(m, a.elevationGainM));
+
+  double get fastestPaceMinPerKm {
+    final runs = _activities.where((a) => a.avgPaceMinPerKm > 1.0).toList();
+    if (runs.isEmpty) return 0.0;
+    return runs.fold(999.0, (m, a) => math.min(m, a.avgPaceMinPerKm));
+  }
 
   ActivityService() {
     loadActivities();

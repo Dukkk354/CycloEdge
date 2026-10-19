@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../models/user_profile.dart';
 import '../../services/ble_service.dart';
+import '../../services/crash_detection_service.dart';
 import '../../services/profile_service.dart';
 import '../sensor_modal.dart';
 
 class ProfileScreen extends StatefulWidget {
   final ProfileService profileService;
   final BleService bleService;
+  final CrashDetectionService? crashDetectionService;
 
   const ProfileScreen({
     super.key,
     required this.profileService,
     required this.bleService,
+    this.crashDetectionService,
   });
 
   @override
@@ -25,11 +28,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _heightController;
   late TextEditingController _restingHrController;
   late TextEditingController _customMaxHrController;
+  late TextEditingController _weeklyGoalController;
+  late TextEditingController _emergencyNameController;
+  late TextEditingController _emergencyPhoneController;
+  late TextEditingController _stravaTokenController;
 
   late String _gender;
   late String _defaultActivity;
   late String _speedUnit;
   late bool _useCustomMaxHr;
+  late bool _voiceCuesEnabled;
+  late bool _crashDetectionEnabled;
 
   @override
   void initState() {
@@ -47,10 +56,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _customMaxHrController = TextEditingController(
       text: p.customMaxHr != null ? p.customMaxHr.toString() : '',
     );
+    _weeklyGoalController = TextEditingController(
+      text: p.weeklyGoalKm.toStringAsFixed(0),
+    );
+    _emergencyNameController = TextEditingController(
+      text: p.emergencyContactName,
+    );
+    _emergencyPhoneController = TextEditingController(
+      text: p.emergencyContactPhone,
+    );
+    _stravaTokenController = TextEditingController(
+      text: p.stravaAccessToken ?? '',
+    );
+
     _gender = p.gender;
     _defaultActivity = p.defaultActivity;
     _speedUnit = p.speedUnit;
     _useCustomMaxHr = p.customMaxHr != null;
+    _voiceCuesEnabled = p.voiceCuesEnabled;
+    _crashDetectionEnabled = p.crashDetectionEnabled;
   }
 
   @override
@@ -61,6 +85,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _heightController.dispose();
     _restingHrController.dispose();
     _customMaxHrController.dispose();
+    _weeklyGoalController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
+    _stravaTokenController.dispose();
     super.dispose();
   }
 
@@ -72,6 +100,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final customMax = _useCustomMaxHr
         ? (int.tryParse(_customMaxHrController.text) ?? 190)
         : null;
+    final weeklyGoal = double.tryParse(_weeklyGoalController.text) ?? 100.0;
+    final stravaToken = _stravaTokenController.text.trim();
 
     final updated = widget.profileService.profile.copyWith(
       name: _nameController.text.trim().isNotEmpty
@@ -85,13 +115,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       customMaxHr: customMax,
       defaultActivity: _defaultActivity,
       speedUnit: _speedUnit,
+      weeklyGoalKm: weeklyGoal,
+      emergencyContactName: _emergencyNameController.text.trim(),
+      emergencyContactPhone: _emergencyPhoneController.text.trim(),
+      stravaAccessToken: stravaToken.isNotEmpty ? stravaToken : null,
+      voiceCuesEnabled: _voiceCuesEnabled,
+      crashDetectionEnabled: _crashDetectionEnabled,
     );
 
     widget.profileService.updateProfile(updated);
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Profil & Zona Detak Jantung Disimpan!'),
+        content: Text('Profil, Keselamatan & Integrasi Disimpan!'),
         backgroundColor: Color(0xFF00E676),
         duration: Duration(seconds: 2),
       ),
@@ -159,7 +195,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 24),
 
-              // Section 4: Pengaturan Preferensi
+              // Section 4: Target Mingguan & Strava Sync
+              _buildSectionTitle('TARGET & SYNC STRAVA', Icons.cloud_upload),
+              const SizedBox(height: 10),
+              _buildStravaAndGoalsCard(),
+
+              const SizedBox(height: 24),
+
+              // Section 5: Keselamatan & Deteksi Tabrakan
+              _buildSectionTitle('KESELAMATAN & DETEKSI TABRAKAN (SOS)', Icons.health_and_safety),
+              const SizedBox(height: 10),
+              _buildSafetyAndSosCard(),
+
+              const SizedBox(height: 24),
+
+              // Section 6: Audio Cues & Peringatan Suara
+              _buildSectionTitle('PANDUAN SUARA & PERINGATAN ZONA', Icons.volume_up),
+              const SizedBox(height: 10),
+              _buildAudioCuesCard(),
+
+              const SizedBox(height: 24),
+
+              // Section 7: Pengaturan Preferensi
               _buildSectionTitle('PREFERENSI APLIKASI', Icons.tune),
               const SizedBox(height: 10),
               _buildAppSettingsCard(),
@@ -602,6 +659,222 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStravaAndGoalsCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF242424)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTextField(
+            controller: _weeklyGoalController,
+            label: 'Target Jarak Mingguan (km)',
+            icon: Icons.track_changes,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            hint: 'Contoh: 100',
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(Icons.cloud_upload, color: Color(0xFFFC4C02), size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Strava Direct Sync',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Upload file GPX aktivitas Anda langsung ke Strava dengan 1 klik setelah selesai berolahraga.',
+            style: TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _stravaTokenController,
+            label: 'Strava Personal Access Token',
+            icon: Icons.key,
+            hint: 'Contoh: 8a7c29b4e...',
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Token didapat dari menu Settings > My API Application di strava.com dengan scope activity:write',
+            style: TextStyle(color: Colors.white38, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSafetyAndSosCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF242424)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Deteksi Tabrakan & Jatuh (Crash Detection)',
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text(
+              'Mendeteksi penurunan kecepatan mendadak (>18 km/h ke berhenti total) & memulai countdown darurat 30 detik.',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            value: _crashDetectionEnabled,
+            activeColor: const Color(0xFFFF1744),
+            onChanged: (val) => setState(() => _crashDetectionEnabled = val),
+          ),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 10),
+          _buildTextField(
+            controller: _emergencyNameController,
+            label: 'Nama Kontak Darurat',
+            icon: Icons.person_pin,
+            hint: 'Contoh: Istri / Ayah / Sahabat',
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(
+            controller: _emergencyPhoneController,
+            label: 'Nomor WhatsApp / HP Kontak Darurat',
+            icon: Icons.phone,
+            keyboardType: TextInputType.phone,
+            hint: 'Contoh: +6281234567890',
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFFF5252)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF5252), size: 18),
+              label: const Text(
+                'Uji Coba Simulasi Tabrakan (30 Detik SOS)',
+                style: TextStyle(color: Color(0xFFFF5252), fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+              onPressed: _showCrashSimulationDialog,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAudioCuesCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF242424)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Panduan Suara & Audio Cues',
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+            subtitle: const Text(
+              'Mengumumkan split interval setiap 1 km (waktu & pace), serta getaran/peringatan jika detak jantung masuk Zona 5 (>90% Max HR).',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            value: _voiceCuesEnabled,
+            activeColor: const Color(0xFF00E5FF),
+            onChanged: (val) => setState(() => _voiceCuesEnabled = val),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCrashSimulationDialog() {
+    if (widget.crashDetectionService != null) {
+      widget.crashDetectionService!.triggerIncident();
+    }
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1012),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFFF1744), width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning, color: Color(0xFFFF1744), size: 26),
+              SizedBox(width: 8),
+              Text('SIMULASI TABRAKAN', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Benturan mendadak disimulasikan! CycloEdge akan otomatis mengirim lokasi GPS & pesan darurat ke kontak Anda jika tidak dibatalkan.',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Alarm SOS dalam 30 detik',
+                style: TextStyle(
+                  color: Color(0xFFFF5252),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Kontak: ${_emergencyNameController.text.isNotEmpty ? _emergencyNameController.text : "Belum diatur"} (${_emergencyPhoneController.text.isNotEmpty ? _emergencyPhoneController.text : "No. HP kosong"})',
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00E676),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () {
+                  if (widget.crashDetectionService != null) {
+                    widget.crashDetectionService!.cancelIncident();
+                  }
+                  Navigator.pop(dialogCtx);
+                },
+                child: const Text('SAYA AMAN (BATALKAN SOS)', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

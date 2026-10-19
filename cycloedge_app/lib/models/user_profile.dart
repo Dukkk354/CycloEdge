@@ -11,6 +11,12 @@ class UserProfile {
   final int? customMaxHr;
   final String defaultActivity; // 'cycling', 'running', 'walking'
   final String speedUnit; // 'km/h' or 'pace'
+  final double weeklyGoalKm;
+  final String emergencyContactName;
+  final String emergencyContactPhone;
+  final String? stravaAccessToken;
+  final bool voiceCuesEnabled;
+  final bool crashDetectionEnabled;
 
   const UserProfile({
     this.name = 'Atlet CycloEdge',
@@ -22,16 +28,20 @@ class UserProfile {
     this.customMaxHr,
     this.defaultActivity = 'cycling',
     this.speedUnit = 'km/h',
+    this.weeklyGoalKm = 100.0,
+    this.emergencyContactName = 'Kontak Darurat',
+    this.emergencyContactPhone = '',
+    this.stravaAccessToken,
+    this.voiceCuesEnabled = true,
+    this.crashDetectionEnabled = true,
   });
 
   /// Maximum Heart Rate calculation
   /// Using Tanaka formula: 208 - (0.7 * age) for general athletes
-  /// Or Fox formula: 220 - age
   int get maxHr {
     if (customMaxHr != null && customMaxHr! > 100) {
       return customMaxHr!;
     }
-    // Tanaka formula
     return (208 - (0.7 * age)).round();
   }
 
@@ -104,10 +114,7 @@ class UserProfile {
   }
 
   /// Calories burned calculation
-  /// Uses Keytel Metabolic Formula if heart rate is available:
-  /// Men:   [(-55.0969 + (0.6309 x HR) + (0.1988 x W) + (0.2017 x A)) / 4.184] x 60 x Hours
-  /// Women: [(-20.4022 + (0.4472 x HR) - (0.1263 x W) + (0.074 x A))  / 4.184] x 60 x Hours
-  /// Fallback: Compendium of Physical Activities (METs)
+  /// Keytel Metabolic Formula
   double calculateCalories({
     required Duration duration,
     required int avgHr,
@@ -126,7 +133,6 @@ class UserProfile {
       }
       return math.max(0.0, calPerMin * (duration.inSeconds / 60.0));
     } else {
-      // MET fallback
       double met = 8.0; // Cycling moderate
       if (activityType == 'walking') met = 3.5;
       if (activityType == 'running') met = 9.8;
@@ -144,6 +150,12 @@ class UserProfile {
     int? customMaxHr,
     String? defaultActivity,
     String? speedUnit,
+    double? weeklyGoalKm,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? stravaAccessToken,
+    bool? voiceCuesEnabled,
+    bool? crashDetectionEnabled,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -155,6 +167,12 @@ class UserProfile {
       customMaxHr: customMaxHr ?? this.customMaxHr,
       defaultActivity: defaultActivity ?? this.defaultActivity,
       speedUnit: speedUnit ?? this.speedUnit,
+      weeklyGoalKm: weeklyGoalKm ?? this.weeklyGoalKm,
+      emergencyContactName: emergencyContactName ?? this.emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
+      stravaAccessToken: stravaAccessToken ?? this.stravaAccessToken,
+      voiceCuesEnabled: voiceCuesEnabled ?? this.voiceCuesEnabled,
+      crashDetectionEnabled: crashDetectionEnabled ?? this.crashDetectionEnabled,
     );
   }
 
@@ -169,6 +187,12 @@ class UserProfile {
       'customMaxHr': customMaxHr,
       'defaultActivity': defaultActivity,
       'speedUnit': speedUnit,
+      'weeklyGoalKm': weeklyGoalKm,
+      'emergencyContactName': emergencyContactName,
+      'emergencyContactPhone': emergencyContactPhone,
+      'stravaAccessToken': stravaAccessToken,
+      'voiceCuesEnabled': voiceCuesEnabled,
+      'crashDetectionEnabled': crashDetectionEnabled,
     };
   }
 
@@ -183,6 +207,12 @@ class UserProfile {
       customMaxHr: (json['customMaxHr'] as num?)?.toInt(),
       defaultActivity: json['defaultActivity'] as String? ?? 'cycling',
       speedUnit: json['speedUnit'] as String? ?? 'km/h',
+      weeklyGoalKm: (json['weeklyGoalKm'] as num?)?.toDouble() ?? 100.0,
+      emergencyContactName: json['emergencyContactName'] as String? ?? 'Kontak Darurat',
+      emergencyContactPhone: json['emergencyContactPhone'] as String? ?? '',
+      stravaAccessToken: json['stravaAccessToken'] as String?,
+      voiceCuesEnabled: json['voiceCuesEnabled'] as bool? ?? true,
+      crashDetectionEnabled: json['crashDetectionEnabled'] as bool? ?? true,
     );
   }
 }

@@ -3,9 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'services/activity_service.dart';
+import 'services/audio_cue_service.dart';
 import 'services/ble_service.dart';
+import 'services/crash_detection_service.dart';
 import 'services/location_service.dart';
+import 'services/offline_map_service.dart';
 import 'services/profile_service.dart';
+import 'services/strava_service.dart';
 import 'ui/main_navigation_shell.dart';
 
 void main() async {
@@ -44,6 +48,10 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
   late final ProfileService _profileService;
   late final ActivityService _activityService;
   late final LocationService _locationService;
+  late final StravaService _stravaService;
+  late final CrashDetectionService _crashDetectionService;
+  late final AudioCueService _audioCueService;
+  late final OfflineMapService _offlineMapService;
 
   @override
   void initState() {
@@ -51,15 +59,31 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
     _bleService = BleService();
     _profileService = ProfileService();
     _activityService = ActivityService();
+    _stravaService = StravaService(profileService: _profileService);
+    _crashDetectionService = CrashDetectionService(profileService: _profileService);
+    _audioCueService = AudioCueService(profileService: _profileService);
+    _offlineMapService = OfflineMapService();
     _locationService = LocationService(
       bleService: _bleService,
       profileService: _profileService,
     );
+
+    _locationService.addListener(_onLocationUpdate);
+  }
+
+  void _onLocationUpdate() {
+    final telemetry = _locationService.telemetry;
+    _crashDetectionService.processTelemetry(telemetry);
+    _audioCueService.processTelemetry(telemetry);
   }
 
   @override
   void dispose() {
+    _locationService.removeListener(_onLocationUpdate);
     _locationService.dispose();
+    _crashDetectionService.dispose();
+    _audioCueService.dispose();
+    _offlineMapService.dispose();
     _activityService.dispose();
     _profileService.dispose();
     _bleService.dispose();
@@ -87,6 +111,10 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
         bleService: _bleService,
         activityService: _activityService,
         profileService: _profileService,
+        stravaService: _stravaService,
+        crashDetectionService: _crashDetectionService,
+        offlineMapService: _offlineMapService,
+        audioCueService: _audioCueService,
       ),
     );
   }

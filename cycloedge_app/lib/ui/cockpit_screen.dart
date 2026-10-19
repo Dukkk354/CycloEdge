@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -11,11 +13,15 @@ import '../models/telemetry_data.dart';
 import '../models/user_profile.dart';
 import '../services/activity_service.dart';
 import '../services/ble_service.dart';
+import '../services/crash_detection_service.dart';
 import '../services/gpx_service.dart';
 import '../services/location_service.dart';
+import '../services/offline_map_service.dart';
 import '../services/profile_service.dart';
+import '../services/strava_service.dart';
 import 'sensor_modal.dart';
 import 'share/activity_share_screen.dart';
+import 'widgets/elevation_profile_widget.dart';
 import 'widgets/map_view_widget.dart';
 import 'widgets/rain_lock_overlay.dart';
 
@@ -24,6 +30,9 @@ class CockpitScreen extends StatefulWidget {
   final BleService bleService;
   final ActivityService? activityService;
   final ProfileService? profileService;
+  final StravaService? stravaService;
+  final CrashDetectionService? crashDetectionService;
+  final OfflineMapService? offlineMapService;
 
   const CockpitScreen({
     super.key,
@@ -31,6 +40,9 @@ class CockpitScreen extends StatefulWidget {
     required this.bleService,
     this.activityService,
     this.profileService,
+    this.stravaService,
+    this.crashDetectionService,
+    this.offlineMapService,
   });
 
   @override
@@ -43,14 +55,49 @@ class _CockpitScreenState extends State<CockpitScreen> {
   bool _isMapFullscreen = false;
   int _currentLap = 1;
   bool _preferPace = false; // Toggle between Speed (km/h) and Pace (min/km)
+  bool _showClimbPro = false; // Toggle ClimbPro Elevation Profile HUD
+
+  List<ElevationPoint> _getElevationPoints(TelemetryData telemetry) {
+    if (_importedRoute != null && _importedRoute!.points.isNotEmpty) {
+      double runningDist = 0.0;
+      final pts = <ElevationPoint>[];
+      for (int i = 0; i < _importedRoute!.points.length; i++) {
+        final p = _importedRoute!.points[i];
+        if (i > 0) {
+          final prev = _importedRoute!.points[i - 1];
+          runningDist += const Distance().as(LengthUnit.Kilometer, prev.coordinate, p.coordinate);
+        }
+        pts.add(ElevationPoint(distanceKm: runningDist, elevationM: p.elevation));
+      }
+      return pts;
+    }
+
+    if (telemetry.breadcrumbs.length > 1) {
+      final pts = <ElevationPoint>[];
+      final stepKm = telemetry.distanceKm / (telemetry.breadcrumbs.length - 1);
+      for (int i = 0; i < telemetry.breadcrumbs.length; i++) {
+        final elev = telemetry.elevation - (telemetry.breadcrumbs.length - 1 - i) * 0.4;
+        pts.add(ElevationPoint(distanceKm: i * stepKm, elevationM: math.max(10.0, elev)));
+      }
+      return pts;
+    }
+
+    return const [];
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([widget.locationService, widget.bleService]),
+      animation: Listenable.merge([
+        widget.locationService,
+        widget.bleService,
+        if (widget.crashDetectionService != null) widget.crashDetectionService!,
+        if (widget.offlineMapService != null) widget.offlineMapService!,
+      ]),
       builder: (context, _) {
         final telemetry = widget.locationService.telemetry;
         final connectedCount = widget.bleService.connectedSensors.length;
+        final isCrashIncident = widget.crashDetectionService?.isIncidentTriggered == true;
 
         return Scaffold(
           backgroundColor: Colors.black, // Pure AMOLED Pitch Black
@@ -70,6 +117,10 @@ class _CockpitScreenState extends State<CockpitScreen> {
                         : _buildPortraitLayout(telemetry, connectedCount);
                   },
                 ),
+
+                // Crash Detection SOS Incident Overlay
+                if (isCrashIncident && widget.crashDetectionService != null)
+                  _buildCrashIncidentOverlay(widget.crashDetectionService!),
 
                 // Rain & Sweat Lock Overlay Shield
                 if (_isRainLocked)
@@ -95,9 +146,9 @@ class _CockpitScreenState extends State<CockpitScreen> {
         // Top Status Bar (GPS FIX, Time, Lap, BLE, GPX, Activity Mode)
         _buildTopStatusBar(telemetry, connectedCount),
 
-        // Map Area on TOP (Takes ~36% of screen height)
+        // Map Area on TOP (Takes ~32% if ClimbPro enabled, else ~36%)
         Expanded(
-          flex: 36,
+          flex: _showClimbPro ? 30 : 36,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             child: MapViewWidget(
@@ -113,9 +164,22 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ),
         ),
 
+        // ClimbPro Live Elevation Profile HUD (When active)
+        if (_showClimbPro)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            child: ElevationProfileWidget(
+              points: _getElevationPoints(telemetry),
+              currentDistanceKm: telemetry.distanceKm,
+              currentElevationM: telemetry.elevation,
+              height: 105,
+              showClimbHud: true,
+            ),
+          ),
+
         // Metric Grid on BOTTOM (Takes remaining height)
         Expanded(
-          flex: 54,
+          flex: _showClimbPro ? 48 : 54,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             child: _buildMetricGrid(telemetry, isLandscape: false),
@@ -134,20 +198,37 @@ class _CockpitScreenState extends State<CockpitScreen> {
   Widget _buildLandscapeLayout(TelemetryData telemetry, int connectedCount) {
     return Row(
       children: [
-        // LEFT: HUGE EXPANSIVE MAP (Takes 60% of horizontal width)
+        // LEFT: HUGE EXPANSIVE MAP (Takes 60% of horizontal width) + ClimbPro if active
         Expanded(
           flex: 60,
           child: Padding(
             padding: const EdgeInsets.all(8.0),
-            child: MapViewWidget(
-              currentPosition: telemetry.currentPosition,
-              heading: telemetry.heading,
-              breadcrumbs: telemetry.breadcrumbs,
-              gpxRoute: _importedRoute,
-              isExpanded: false,
-              onToggleExpand: () {
-                setState(() => _isMapFullscreen = true);
-              },
+            child: Column(
+              children: [
+                Expanded(
+                  child: MapViewWidget(
+                    currentPosition: telemetry.currentPosition,
+                    heading: telemetry.heading,
+                    breadcrumbs: telemetry.breadcrumbs,
+                    gpxRoute: _importedRoute,
+                    isExpanded: false,
+                    onToggleExpand: () {
+                      setState(() => _isMapFullscreen = true);
+                    },
+                  ),
+                ),
+                if (_showClimbPro)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: ElevationProfileWidget(
+                      points: _getElevationPoints(telemetry),
+                      currentDistanceKm: telemetry.distanceKm,
+                      currentElevationM: telemetry.elevation,
+                      height: 80,
+                      showClimbHud: false,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
@@ -429,6 +510,23 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(width: 4),
+
+              // ClimbPro Toggle Icon
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                icon: Icon(
+                  Icons.terrain,
+                  color: _showClimbPro ? const Color(0xFF00E676) : Colors.white38,
+                  size: 18,
+                ),
+                tooltip: 'ClimbPro Elevation Profile',
+                onPressed: () {
+                  setState(() => _showClimbPro = !_showClimbPro);
+                },
               ),
               const SizedBox(width: 4),
 
@@ -803,6 +901,21 @@ class _CockpitScreenState extends State<CockpitScreen> {
             SnackBar(
               content: Text('GPX Terbaca: ${route.name} (${route.totalDistanceKm.toStringAsFixed(1)} km)'),
               backgroundColor: const Color(0xFF1E1E1E),
+              action: widget.offlineMapService != null
+                  ? SnackBarAction(
+                      label: 'Cache Offline',
+                      textColor: const Color(0xFF00E5FF),
+                      onPressed: () {
+                        widget.offlineMapService!.cacheRouteArea(route.coordinates);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Mengunduh tile peta offline untuk rute ini...'),
+                            backgroundColor: Color(0xFF00E5FF),
+                          ),
+                        );
+                      },
+                    )
+                  : null,
             ),
           );
         }
@@ -936,12 +1049,86 @@ class _CockpitScreenState extends State<CockpitScreen> {
                     builder: (_) => ActivityShareScreen(
                       activity: newRecord,
                       profile: prof,
+                      stravaService: widget.stravaService,
                     ),
                   ),
                 );
               }
             },
             child: const Text('Simpan & Bagikan', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCrashIncidentOverlay(CrashDetectionService crash) {
+    return Container(
+      color: Colors.black.withOpacity(0.94),
+      width: double.infinity,
+      height: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFFF1744).withOpacity(0.2),
+              border: Border.all(color: const Color(0xFFFF1744), width: 3),
+            ),
+            child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF1744), size: 60),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'BENTURAN TERDETEKSI!',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Apakah Anda baik-baik saja? Penurunan kecepatan drastis terdeteksi.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '${crash.countdownSeconds}',
+            style: const TextStyle(
+              color: Color(0xFFFF1744),
+              fontSize: 68,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'detik sebelum pesan SOS dikirim ke WhatsApp / SMS kontak darurat',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+          const SizedBox(height: 36),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00E676),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                crash.cancelIncident();
+              },
+              child: const Text(
+                'SAYA AMAN (BATALKAN SOS)',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              ),
+            ),
           ),
         ],
       ),

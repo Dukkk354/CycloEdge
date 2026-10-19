@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../services/activity_service.dart';
+import '../services/audio_cue_service.dart';
 import '../services/ble_service.dart';
+import '../services/crash_detection_service.dart';
 import '../services/location_service.dart';
+import '../services/offline_map_service.dart';
 import '../services/profile_service.dart';
+import '../services/strava_service.dart';
 import 'cockpit_screen.dart';
 import 'home/home_screen.dart';
 import 'profile/profile_screen.dart';
@@ -13,6 +17,10 @@ class MainNavigationShell extends StatefulWidget {
   final BleService bleService;
   final ActivityService activityService;
   final ProfileService profileService;
+  final StravaService? stravaService;
+  final CrashDetectionService? crashDetectionService;
+  final OfflineMapService? offlineMapService;
+  final AudioCueService? audioCueService;
 
   const MainNavigationShell({
     super.key,
@@ -20,6 +28,10 @@ class MainNavigationShell extends StatefulWidget {
     required this.bleService,
     required this.activityService,
     required this.profileService,
+    this.stravaService,
+    this.crashDetectionService,
+    this.offlineMapService,
+    this.audioCueService,
   });
 
   @override
@@ -95,6 +107,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       profileService: widget.profileService,
       locationService: widget.locationService,
       bleService: widget.bleService,
+      stravaService: widget.stravaService,
       onStartRecord: () {
         setState(() => _currentIndex = 1); // Switch to Cockpit
       },
@@ -107,6 +120,9 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       bleService: widget.bleService,
       activityService: widget.activityService,
       profileService: widget.profileService,
+      stravaService: widget.stravaService,
+      crashDetectionService: widget.crashDetectionService,
+      offlineMapService: widget.offlineMapService,
     );
   }
 
@@ -114,6 +130,8 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     return ProfileScreen(
       profileService: widget.profileService,
       bleService: widget.bleService,
+      crashDetectionService: widget.crashDetectionService,
     );
   }
 }
+

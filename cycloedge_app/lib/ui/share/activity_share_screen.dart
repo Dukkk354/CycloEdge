@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
@@ -8,16 +9,19 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/activity_record.dart';
 import '../../models/user_profile.dart';
+import '../../services/strava_service.dart';
 import '../widgets/route_polyline_painter.dart';
 
 class ActivityShareScreen extends StatefulWidget {
   final ActivityRecord activity;
   final UserProfile profile;
+  final StravaService? stravaService;
 
   const ActivityShareScreen({
     super.key,
     required this.activity,
     required this.profile,
+    this.stravaService,
   });
 
   @override
@@ -28,6 +32,8 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
   final GlobalKey _cardKey = GlobalKey();
   int _selectedTemplate = 0;
   bool _isExporting = false;
+  bool _isSyncingStrava = false;
+  File? _pickedPhoto;
   late TextEditingController _titleController;
 
   final List<String> _templateNames = [
@@ -94,6 +100,60 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
     }
   }
 
+  Future<void> _pickPhoto() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(type: FileType.image);
+      if (res != null && res.files.single.path != null) {
+        setState(() => _pickedPhoto = File(res.files.single.path!));
+      }
+    } catch (e) {
+      debugPrint('Error picking photo: $e');
+    }
+  }
+
+  Future<void> _syncToStrava() async {
+    if (widget.stravaService == null) return;
+    setState(() => _isSyncingStrava = true);
+    try {
+      final res = await widget.stravaService!.uploadActivity(widget.activity);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res.message),
+            backgroundColor: res.success ? const Color(0xFF00E676) : Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingStrava = false);
+    }
+  }
+
+  BoxDecoration _buildCardDecoration(Color baseColor, {Color? borderColor, double borderWidth = 1.0, double borderRadius = 16}) {
+    return BoxDecoration(
+      color: _pickedPhoto != null ? Colors.black : baseColor,
+      image: _pickedPhoto != null
+          ? DecorationImage(
+              image: FileImage(_pickedPhoto!),
+              fit: BoxFit.cover,
+              colorFilter: ColorFilter.mode(
+                Colors.black.withOpacity(0.68),
+                BlendMode.darken,
+              ),
+            )
+          : null,
+      borderRadius: BorderRadius.circular(borderRadius),
+      border: Border.all(color: borderColor ?? Colors.white12, width: borderWidth),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.5),
+          blurRadius: 20,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,7 +211,42 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
               ),
             ),
 
-            const SizedBox(height: 8),
+            // Photo Background Action Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              child: Row(
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF00E5FF),
+                      side: const BorderSide(color: Color(0xFF00E5FF)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: _pickPhoto,
+                    icon: Icon(_pickedPhoto == null ? Icons.add_a_photo : Icons.photo_library, size: 14),
+                    label: Text(
+                      _pickedPhoto == null ? 'Pasang Foto' : 'Ganti Foto',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  if (_pickedPhoto != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () => setState(() => _pickedPhoto = null),
+                      icon: const Icon(Icons.delete_outline, size: 14),
+                      label: const Text('Hapus Foto', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 6),
 
             // Card Preview Area
             Expanded(
@@ -175,31 +270,54 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
                 color: Color(0xFF121212),
                 border: Border(top: BorderSide(color: Colors.white12)),
               ),
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFC4C02), // Strava orange
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+              child: Row(
+                children: [
+                  if (widget.stravaService != null) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFFC4C02),
+                        side: const BorderSide(color: Color(0xFFFC4C02), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      ),
+                      onPressed: _isSyncingStrava ? null : _syncToStrava,
+                      icon: _isSyncingStrava
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(color: Color(0xFFFC4C02), strokeWidth: 2),
+                            )
+                          : const Icon(Icons.cloud_upload, size: 18),
+                      label: const Text('Strava', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     ),
-                    elevation: 4,
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFC4C02), // Strava orange
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 4,
+                        ),
+                        onPressed: _isExporting ? null : _shareImage,
+                        icon: _isExporting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Icon(Icons.share, size: 20),
+                        label: Text(
+                          _isExporting ? 'Memproses Kartu...' : 'Bagikan ke WhatsApp / IG',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ),
                   ),
-                  onPressed: _isExporting ? null : _shareImage,
-                  icon: _isExporting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.share, size: 20),
-                  label: Text(
-                    _isExporting ? 'Memproses Kartu...' : 'Bagikan ke WhatsApp / IG / Medsos',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
+                ],
               ),
             ),
           ],
@@ -269,18 +387,7 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
 
     return Container(
       width: 360,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: _buildCardDecoration(const Color(0xFF1C1C1E)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -460,17 +567,10 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
 
     return Container(
       width: 360,
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.4), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00E5FF).withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
+      decoration: _buildCardDecoration(
+        Colors.black,
+        borderColor: const Color(0xFF00E5FF).withOpacity(0.4),
+        borderWidth: 1.5,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,11 +746,7 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
     return Container(
       width: 360,
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141417),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white10),
-      ),
+      decoration: _buildCardDecoration(const Color(0xFF141417), borderColor: Colors.white10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -745,14 +841,9 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
       width: 320,
       height: 568, // 9:16 approx
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF1A1A24), Color(0xFF0A0A0E)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white12),
+      decoration: _buildCardDecoration(
+        const Color(0xFF1A1A24),
+        borderRadius: 24,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1011,3 +1102,4 @@ class _ActivityShareScreenState extends State<ActivityShareScreen> {
     );
   }
 }
+

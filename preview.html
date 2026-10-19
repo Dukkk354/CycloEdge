@@ -640,6 +640,7 @@
       </select>
       <button class="sim-btn" id="btnOpenProfile" style="border-color: #00e5ff; color: #00e5ff;">👤 Profil & Zona HR</button>
       <button class="sim-btn" id="btnOpenShare" style="border-color: #fc4c02; color: #fc4c02;">📤 Strava Share</button>
+      <button class="sim-btn" id="btnTestCrash" style="border-color: #ff1744; color: #ff1744;" onclick="triggerCrashSOS()">🚨 Tes Crash SOS</button>
       <button class="sim-btn" id="btnConnectBleHr" style="border-color: var(--electric-green); color: var(--electric-green);">⌚ Jam Coros (BLE HR)</button>
       <button class="sim-btn" id="btnImportGpx" style="border-color: #00d4ff; color: #00d4ff;">📂 Import GPX</button>
       <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;">
@@ -893,6 +894,20 @@
     </div>
   </div>
 
+  <!-- Crash Detection SOS Modal -->
+  <div class="app-modal" id="crashModal">
+    <div class="modal-content" style="text-align: center; border: 2px solid #ff1744; max-width: 380px;">
+      <div style="font-size: 48px; margin-bottom: 8px;">🚨</div>
+      <div style="font-size: 18px; font-weight: 900; color: #ff1744; margin-bottom: 6px;">BENTURAN TERDETEKSI!</div>
+      <div style="color: #bbb; font-size: 12px; margin-bottom: 16px; line-height: 1.4;">
+        Penurunan kecepatan ekstrem terdeteksi. CycloEdge akan otomatis mengirim lokasi GPS & pesan darurat ke WhatsApp / SMS kontak darurat jika tidak dibatalkan.
+      </div>
+      <div style="font-size: 64px; font-weight: 900; color: #ff1744; font-family: monospace; line-height: 1.0;" id="crashCountdown">30</div>
+      <div style="color: #888; font-size: 11px; margin: 8px 0 20px;">detik sebelum SOS otomatis dikirim</div>
+      <button class="sim-btn" style="width: 100%; background: #00e676; color: #000; font-weight: 900; padding: 14px; border-radius: 10px; cursor: pointer; border: none; font-size: 14px;" onclick="cancelCrashSOS()">SAYA AMAN (BATALKAN SOS)</button>
+    </div>
+  </div>
+
   <!-- Leaflet Map JS Library -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -915,6 +930,30 @@
     let calories = 520;
     let lapCount = 3;
     let elapsedSeconds = 42 * 60 + 18;
+
+    let crashTimer = null;
+    let crashSeconds = 30;
+
+    function triggerCrashSOS() {
+      crashSeconds = 30;
+      document.getElementById('crashCountdown').textContent = crashSeconds;
+      document.getElementById('crashModal').classList.add('active');
+      clearInterval(crashTimer);
+      crashTimer = setInterval(() => {
+        crashSeconds--;
+        document.getElementById('crashCountdown').textContent = crashSeconds;
+        if (crashSeconds <= 0) {
+          clearInterval(crashTimer);
+          alert('🚨 PESAN DARURAT OTOMATIS CYCLOEDGE TERKIRIM!\n\nLokasi GPS Terakhir: https://maps.google.com/?q=-6.8915,107.6107\nPesan dikirim ke kontak darurat via WhatsApp & SMS.');
+          document.getElementById('crashModal').classList.remove('active');
+        }
+      }, 1000);
+    }
+
+    function cancelCrashSOS() {
+      clearInterval(crashTimer);
+      document.getElementById('crashModal').classList.remove('active');
+    }
 
     // Athlete Profile
     let userProfile = {
