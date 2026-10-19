@@ -7,7 +7,7 @@ class TelemetryData {
   final double speed; // km/h
   final double maxSpeed; // km/h
   final double avgSpeed; // km/h
-  final int cadence; // RPM
+  final int cadence; // RPM (or steps/min for running/walking)
   final int heartRate; // BPM
   final int power; // Watts
   final double distanceKm; // km
@@ -16,10 +16,11 @@ class TelemetryData {
   final Duration elapsedTime;
   final Duration movingTime;
   final RideState rideState;
-  final bool isAutoPaused;
   final LatLng? currentPosition;
   final double heading; // degrees (0-360)
   final List<LatLng> breadcrumbs;
+  final String activityType; // 'cycling', 'running', 'walking'
+  final int calories; // kcal
 
   const TelemetryData({
     this.speed = 0.0,
@@ -34,16 +35,49 @@ class TelemetryData {
     this.elapsedTime = Duration.zero,
     this.movingTime = Duration.zero,
     this.rideState = RideState.idle,
-    this.isAutoPaused = false,
     this.currentPosition,
     this.heading = 0.0,
     this.breadcrumbs = const [],
+    this.activityType = 'cycling',
+    this.calories = 0,
   });
 
   bool get isRecording => rideState == RideState.recording;
   bool get isPaused => rideState == RideState.paused;
 
-  /// HR Zone calculation (standard 5-zone model based on max HR, e.g. 190 default)
+  /// Current Pace in minutes per kilometer
+  double get paceMinutesPerKm {
+    if (speed < 0.4) return 0.0;
+    return 60.0 / speed;
+  }
+
+  /// Formatted Live Pace string (e.g. 5'32" /km or --'--")
+  String get formattedPace {
+    if (speed < 0.4 || paceMinutesPerKm <= 0 || paceMinutesPerKm > 99) {
+      return "--'--\"";
+    }
+    final min = paceMinutesPerKm.floor();
+    final sec = ((paceMinutesPerKm - min) * 60).round();
+    return "$min'${sec.toString().padLeft(2, '0')}\"";
+  }
+
+  /// Average Pace in minutes per kilometer
+  double get avgPaceMinutesPerKm {
+    if (avgSpeed < 0.4) return 0.0;
+    return 60.0 / avgSpeed;
+  }
+
+  /// Formatted Average Pace string
+  String get formattedAvgPace {
+    if (avgSpeed < 0.4 || avgPaceMinutesPerKm <= 0 || avgPaceMinutesPerKm > 99) {
+      return "--'--\"";
+    }
+    final min = avgPaceMinutesPerKm.floor();
+    final sec = ((avgPaceMinutesPerKm - min) * 60).round();
+    return "$min'${sec.toString().padLeft(2, '0')}\"";
+  }
+
+  /// Heart Rate Zone (Standard 5-zone model)
   int get hrZone {
     if (heartRate <= 0) return 0;
     if (heartRate < 114) return 1; // < 60%
@@ -100,10 +134,11 @@ class TelemetryData {
     Duration? elapsedTime,
     Duration? movingTime,
     RideState? rideState,
-    bool? isAutoPaused,
     LatLng? currentPosition,
     double? heading,
     List<LatLng>? breadcrumbs,
+    String? activityType,
+    int? calories,
   }) {
     return TelemetryData(
       speed: speed ?? this.speed,
@@ -118,11 +153,11 @@ class TelemetryData {
       elapsedTime: elapsedTime ?? this.elapsedTime,
       movingTime: movingTime ?? this.movingTime,
       rideState: rideState ?? this.rideState,
-      isAutoPaused: isAutoPaused ?? this.isAutoPaused,
       currentPosition: currentPosition ?? this.currentPosition,
       heading: heading ?? this.heading,
       breadcrumbs: breadcrumbs ?? this.breadcrumbs,
+      activityType: activityType ?? this.activityType,
+      calories: calories ?? this.calories,
     );
   }
 }
-

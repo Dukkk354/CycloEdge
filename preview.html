@@ -530,24 +530,98 @@
       width: 100%;
     }
 
-    /* Auto-pause banner */
-    .auto-pause-banner {
-      background: var(--pulse-red);
-      color: var(--pure-white);
-      text-align: center;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      padding: 4px;
-      border-radius: 6px;
-      margin-bottom: 6px;
+    /* Modal Dialogs */
+    .app-modal {
       display: none;
-      animation: flash 1s infinite alternate;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+      backdrop-filter: blur(8px);
     }
-
-    @keyframes flash {
-      from { opacity: 0.8; }
-      to { opacity: 1; }
+    .app-modal.active { display: flex; }
+    .modal-content {
+      background: #141416;
+      border: 1px solid #2a2a2a;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #242424;
+      padding-bottom: 10px;
+    }
+    .modal-title { font-size: 16px; font-weight: 800; color: #fff; }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+    .form-group input, .form-group select {
+      width: 100%;
+      background: #1e1e20;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .zone-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    .zone-table th, .zone-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #222;
+      text-align: left;
+    }
+    .zone-table th { color: #888; }
+    .share-template-tabs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      margin-bottom: 14px;
+      padding-bottom: 4px;
+    }
+    .share-tab-btn {
+      background: #1e1e1e;
+      color: #aaa;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .share-tab-btn.active {
+      background: #fc4c02;
+      color: #fff;
+      border-color: #fc4c02;
+    }
+    .share-card-preview {
+      background: #000;
+      border-radius: 14px;
+      padding: 16px;
+      border: 1px solid #333;
+      margin-bottom: 16px;
     }
   </style>
 </head>
@@ -558,15 +632,22 @@
     <div class="title">CYCLOEDGE V3.0 COCKPIT SIMULATOR</div>
     <div class="sim-controls">
       <button class="sim-btn" id="btnToggleOrientation">Ganti ke Landscape</button>
-      <button class="sim-btn active" id="btnAutoSim">Simulasi Gowes Otomatis: ON</button>
-      <button class="sim-btn" id="btnConnectBleHr" style="border-color: var(--electric-green); color: var(--electric-green);">⌚ Hubungkan Jam Coros (BLE HR)</button>
-      <button class="sim-btn" id="btnImportGpx" style="border-color: #00d4ff; color: #00d4ff;">📂 Import File GPX</button>
+      <button class="sim-btn active" id="btnAutoSim">Simulasi: ON</button>
+      <select class="sim-btn" id="selectActivity" style="border-color: #00e5ff; color: #00e5ff; cursor: pointer;">
+        <option value="cycling">🚴 Gowes Sepeda (km/h)</option>
+        <option value="running">🏃 Lari (Pace min/km)</option>
+        <option value="walking">🚶 Jalan Kaki (Pace min/km)</option>
+      </select>
+      <button class="sim-btn" id="btnOpenProfile" style="border-color: #00e5ff; color: #00e5ff;">👤 Profil & Zona HR</button>
+      <button class="sim-btn" id="btnOpenShare" style="border-color: #fc4c02; color: #fc4c02;">📤 Strava Share</button>
+      <button class="sim-btn" id="btnConnectBleHr" style="border-color: var(--electric-green); color: var(--electric-green);">⌚ Jam Coros (BLE HR)</button>
+      <button class="sim-btn" id="btnImportGpx" style="border-color: #00d4ff; color: #00d4ff;">📂 Import GPX</button>
       <input type="file" id="gpxFileInput" accept=".gpx" style="display: none;">
       <select class="sim-btn" id="selectSampleRoute" style="background: #2a2a2a; border-color: #444; color: #fff; cursor: pointer;">
-        <option value="">🗺️ Pilih Rute Contoh...</option>
+        <option value="">🗺️ Rute Contoh...</option>
         <option value="monas">Monas Loop (Jakarta)</option>
         <option value="gbk">GBK Senayan Loop (Jakarta)</option>
-        <option value="lembang">Dago - Lembang (Tanjakan Bandung)</option>
+        <option value="lembang">Dago - Lembang (Bandung)</option>
       </select>
       
       <div class="sim-slider-group">
@@ -598,9 +679,6 @@
           <button class="unlock-progress-btn" id="btnUnlock">BUKA KUNCI LAYAR</button>
         </div>
       </div>
-
-      <!-- Auto Pause Banner -->
-      <div class="auto-pause-banner" id="autoPauseBanner">AUTO-PAUSED (KECEPATAN &lt; 2 KM/H)</div>
 
       <!-- Top Status Bar -->
       <div class="status-bar">
@@ -716,6 +794,105 @@
     </div>
   </div>
 
+  <!-- Profile & HR Zone Settings Modal -->
+  <div class="app-modal" id="profileModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">👤 Data Diri & Zona Detak Jantung</div>
+        <button class="modal-close" onclick="closeProfileModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Nama Atlet</label>
+        <input type="text" id="profName" value="Atlet CycloEdge">
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <div class="form-group" style="flex: 1;">
+          <label>Usia (Tahun)</label>
+          <input type="number" id="profAge" value="28">
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label>Jenis Kelamin</label>
+          <select id="profGender">
+            <option value="male">Pria</option>
+            <option value="female">Wanita</option>
+          </select>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <div class="form-group" style="flex: 1;">
+          <label>Berat Badan (kg)</label>
+          <input type="number" id="profWeight" value="70.0" step="0.5">
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label>Tinggi Badan (cm)</label>
+          <input type="number" id="profHeight" value="175">
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <div class="form-group" style="flex: 1;">
+          <label>Resting HR (bpm)</label>
+          <input type="number" id="profRestingHr" value="60">
+        </div>
+        <div class="form-group" style="flex: 1;">
+          <label>Custom Max HR (Opsional)</label>
+          <input type="number" id="profCustomMaxHr" placeholder="Otomatis (Tanaka)">
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <div style="font-size: 12px; font-weight: 800; color: #00e5ff; letter-spacing: 0.5px;">KALKULASI 5 ZONA DETAK JANTUNG</div>
+        <table class="zone-table">
+          <thead>
+            <tr>
+              <th>Zona</th>
+              <th>Intensitas</th>
+              <th>Rentang BPM</th>
+            </tr>
+          </thead>
+          <tbody id="zonesTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top: 16px; display: flex; gap: 8px;">
+        <button class="sim-btn" onclick="saveProfile()" style="flex: 1; background: #00e5ff; color: #000; font-weight: 800; padding: 10px;">Simpan Profil</button>
+        <button class="sim-btn" onclick="closeProfileModal()" style="padding: 10px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Strava Style Activity Share Modal -->
+  <div class="app-modal" id="shareModal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title">📤 Bagikan Aktivitas Ala Strava</div>
+        <button class="modal-close" onclick="closeShareModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label>Judul Aktivitas</label>
+        <input type="text" id="shareTitle" value="Gowes Pagi Dago Pakar">
+      </div>
+
+      <!-- Template Selectors -->
+      <div class="share-template-tabs">
+        <button class="share-tab-btn active" onclick="switchShareTemplate(0)">Strava Classic</button>
+        <button class="share-tab-btn" onclick="switchShareTemplate(1)">AMOLED Neon</button>
+        <button class="share-tab-btn" onclick="switchShareTemplate(2)">Minimalist</button>
+        <button class="share-tab-btn" onclick="switchShareTemplate(3)">Story 9:16</button>
+      </div>
+
+      <!-- Live Share Card Preview Container -->
+      <div id="shareCardContainer"></div>
+
+      <div style="display: flex; gap: 8px; margin-top: 14px;">
+        <button class="sim-btn" id="btnDoShare" onclick="doShareActivity()" style="flex: 1; background: #fc4c02; color: #fff; font-weight: 800; padding: 12px;">📲 Bagikan ke Medsos / WhatsApp</button>
+        <button class="sim-btn" onclick="closeShareModal()" style="padding: 12px;">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Leaflet Map JS Library -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -723,10 +900,11 @@
     // State
     let isRecording = true;
     let isPaused = false;
-    let isAutoPaused = false;
     let isLocked = false;
     let isLandscape = false;
     let isAutoSim = true;
+    let currentActivity = 'cycling'; // 'cycling', 'running', 'walking'
+    let isPaceMode = false; // toggle speed vs pace
 
     let speed = 34.8;
     let distance = 24.60;
@@ -734,8 +912,31 @@
     let cadence = 88;
     let power = 245;
     let ascent = 485;
+    let calories = 520;
     let lapCount = 3;
     let elapsedSeconds = 42 * 60 + 18;
+
+    // Athlete Profile
+    let userProfile = {
+      name: 'Atlet CycloEdge',
+      age: 28,
+      gender: 'male',
+      weightKg: 70.0,
+      heightCm: 175,
+      restingHr: 60,
+      customMaxHr: null
+    };
+
+    // Load saved profile if available
+    try {
+      const saved = localStorage.getItem('cycloedge_preview_profile');
+      if (saved) userProfile = JSON.parse(saved);
+    } catch(e) {}
+
+    function getMaxHr() {
+      if (userProfile.customMaxHr && userProfile.customMaxHr > 100) return userProfile.customMaxHr;
+      return Math.round(208 - (0.7 * userProfile.age));
+    }
 
     // Elements
     const cockpitContainer = document.getElementById('cockpitContainer');
@@ -743,6 +944,7 @@
     const mapArea = document.getElementById('mapArea');
     const btnToggleOrientation = document.getElementById('btnToggleOrientation');
     const btnAutoSim = document.getElementById('btnAutoSim');
+    const selectActivity = document.getElementById('selectActivity');
     const sliderSpeed = document.getElementById('sliderSpeed');
     const sliderSpeedVal = document.getElementById('sliderSpeedVal');
     const sliderHr = document.getElementById('sliderHr');
@@ -757,7 +959,6 @@
     const valHrBadge = document.getElementById('valHrBadge');
     const valPower = document.getElementById('valPower');
     const valAscent = document.getElementById('valAscent');
-    const autoPauseBanner = document.getElementById('autoPauseBanner');
 
     const btnLock = document.getElementById('btnLock');
     const btnLap = document.getElementById('btnLap');
@@ -925,7 +1126,7 @@
     setInterval(() => {
       if (!isRecording) return;
 
-      if (!isPaused && !isAutoPaused) {
+      if (!isPaused) {
         elapsedSeconds++;
 
         // Only accumulate synthetic distance in Auto-Simulation mode
@@ -934,10 +1135,22 @@
           distance += deltaDist;
 
           const rand = Math.sin(elapsedSeconds * 0.2);
-          speed = Math.max(0, 32 + rand * 5);
-          cadence = Math.round(85 + rand * 8);
-          power = Math.round(230 + rand * 35);
-          heartRate = Math.round(148 + rand * 6);
+          if (currentActivity === 'walking') {
+            speed = Math.max(0, 4.2 + rand * 0.8);
+            cadence = Math.round(100 + rand * 6);
+            power = 0;
+            heartRate = Math.round(105 + rand * 4);
+          } else if (currentActivity === 'running') {
+            speed = Math.max(0, 10.5 + rand * 1.5);
+            cadence = Math.round(165 + rand * 8);
+            power = 0;
+            heartRate = Math.round(155 + rand * 5);
+          } else {
+            speed = Math.max(0, 32 + rand * 5);
+            cadence = Math.round(85 + rand * 8);
+            power = Math.round(230 + rand * 35);
+            heartRate = Math.round(148 + rand * 6);
+          }
           ascent += 0.2;
 
           sliderSpeed.value = speed;
@@ -955,22 +1168,17 @@
             }
           }
         }
-
-        // Auto pause check: speed < 2.0 km/h triggers auto-pause
-        if (speed < 2.0) {
-          isAutoPaused = true;
-          autoPauseBanner.style.display = 'block';
-        }
-      } else if (isAutoPaused) {
-        // Resume check: speed > 3.0 km/h triggers resume
-        if (speed >= 3.0) {
-          isAutoPaused = false;
-          autoPauseBanner.style.display = 'none';
-        }
       }
 
       updateUI();
     }, 1000);
+
+    function getFormattedPace(spd) {
+      if (spd < 0.4) return "--'--\"";
+      const paceMin = Math.floor(60.0 / spd);
+      const paceSec = Math.round((60.0 / spd - paceMin) * 60);
+      return `${paceMin}'${paceSec.toString().padStart(2, '0')}"`;
+    }
 
     function updateUI() {
       // Time format
@@ -981,15 +1189,57 @@
                              `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
       dispLap.textContent = `LAP ${lapCount}`;
-      valSpeed.textContent = speed.toFixed(1);
+
+      // Calculate Calories with Keytel Formula
+      const totalHours = elapsedSeconds / 3600.0;
+      if (heartRate > 40) {
+        let calPerMin;
+        if (userProfile.gender === 'female') {
+          calPerMin = ((-20.4022 + (0.4472 * heartRate) - (0.1263 * userProfile.weightKg) + (0.074 * userProfile.age)) / 4.184);
+        } else {
+          calPerMin = ((-55.0969 + (0.6309 * heartRate) + (0.1988 * userProfile.weightKg) + (0.2017 * userProfile.age)) / 4.184);
+        }
+        calories = Math.max(0, Math.round(calPerMin * (elapsedSeconds / 60.0)));
+      } else {
+        const met = currentActivity === 'walking' ? 3.5 : (currentActivity === 'running' ? 9.8 : 8.0);
+        calories = Math.round(met * userProfile.weightKg * totalHours);
+      }
+
+      // Speed vs Pace display
+      const showPace = isPaceMode || currentActivity !== 'cycling';
+      const speedCardHeader = valSpeed.closest('.metric-card').querySelector('.metric-header span:first-child');
+      const speedCardUnit = valSpeed.nextElementSibling;
+
+      if (showPace) {
+        speedCardHeader.textContent = 'PACE (TAP UBAH)';
+        valSpeed.textContent = getFormattedPace(speed);
+        speedCardUnit.textContent = '/km';
+      } else {
+        speedCardHeader.textContent = 'KECEPATAN (TAP UBAH)';
+        valSpeed.textContent = speed.toFixed(1);
+        speedCardUnit.textContent = 'km/h';
+      }
+
       valDistance.textContent = distance.toFixed(2);
-      valCadence.textContent = cadence;
+      valCadence.textContent = currentActivity === 'cycling' ? cadence : Math.round(cadence * 1.5); // steps/min for run/walk
       valHr.textContent = heartRate;
-      valPower.textContent = power;
+
+      // Power / Calories display in Row 3
+      if (currentActivity === 'cycling' && power > 0) {
+        valPower.textContent = power;
+        document.getElementById('valNpBadge').textContent = `${calories} kcal`;
+      } else {
+        valPower.textContent = calories;
+        valPower.nextElementSibling.textContent = 'kcal';
+        document.getElementById('valNpBadge').textContent = 'KEYTEL';
+      }
+
       valAscent.textContent = Math.round(ascent);
 
-      // HR Zone calculation
-      const hrPct = heartRate / 190.0;
+      // HR Zone calculation based on user's max HR
+      const maxHr = getMaxHr();
+      const hrPct = heartRate / maxHr;
+
       if (hrPct < 0.6) {
         valHrBadge.textContent = 'Z1 RECOVERY';
         valHrBadge.style.color = 'var(--zone-1)';
@@ -1007,23 +1257,34 @@
         valHrBadge.style.color = 'var(--zone-4)';
         valHr.style.color = 'var(--zone-4)';
       } else {
-        valHrBadge.textContent = 'Z5 ANAEROBIC';
+        valHrBadge.textContent = 'Z5 VO2 MAX';
         valHrBadge.style.color = 'var(--zone-5)';
         valHr.style.color = 'var(--zone-5)';
       }
     }
 
+    // Toggle Speed / Pace on card click
+    valSpeed.closest('.metric-card').style.cursor = 'pointer';
+    valSpeed.closest('.metric-card').addEventListener('click', () => {
+      isPaceMode = !isPaceMode;
+      updateUI();
+    });
+
+    // Activity selector change
+    selectActivity.addEventListener('change', (e) => {
+      currentActivity = e.target.value;
+      if (currentActivity === 'walking' || currentActivity === 'running') {
+        isPaceMode = true;
+      } else {
+        isPaceMode = false;
+      }
+      updateUI();
+    });
+
     // Sliders
     sliderSpeed.addEventListener('input', (e) => {
       speed = parseFloat(e.target.value);
       sliderSpeedVal.textContent = speed.toFixed(1) + ' km/h';
-      if (speed < 2.0) {
-        isAutoPaused = true;
-        autoPauseBanner.style.display = 'block';
-      } else if (isAutoPaused && speed > 3.0) {
-        isAutoPaused = false;
-        autoPauseBanner.style.display = 'none';
-      }
       updateUI();
     });
 
@@ -1036,7 +1297,7 @@
     btnAutoSim.addEventListener('click', () => {
       isAutoSim = !isAutoSim;
       btnAutoSim.className = isAutoSim ? 'sim-btn active' : 'sim-btn';
-      btnAutoSim.textContent = 'Simulasi Gowes Otomatis: ' + (isAutoSim ? 'ON' : 'OFF');
+      btnAutoSim.textContent = 'Simulasi: ' + (isAutoSim ? 'ON' : 'OFF');
     });
 
     // Lap
@@ -1057,6 +1318,11 @@
       }
     });
 
+    // Stop button opens Strava Share
+    btnStop.addEventListener('click', () => {
+      openShareModal();
+    });
+
     // Rain Lock
     btnLock.addEventListener('click', () => {
       isLocked = true;
@@ -1068,12 +1334,12 @@
       rainLockShield.className = 'rain-lock-shield';
     });
 
-    // Screen Wake Lock API (keeps iPhone screen awake during ride)
+    // Screen Wake Lock API
     if ('wakeLock' in navigator) {
       navigator.wakeLock.request('screen').catch(() => {});
     }
 
-    // Toggle Real GPS mode on phone by tapping GPS badge
+    // Toggle Real GPS mode without auto-pause (accurate for walking and cycling)
     const gpsBadge = document.querySelector('.gps-badge');
     let realGpsWatchId = null;
     let lastLat = null, lastLon = null;
@@ -1087,16 +1353,9 @@
         if ('geolocation' in navigator) {
           isAutoSim = false;
           btnAutoSim.className = 'sim-btn';
-          btnAutoSim.textContent = 'Simulasi Gowes Otomatis: OFF';
+          btnAutoSim.textContent = 'Simulasi: OFF';
 
-          // Reset metrics to 0 when starting Real GPS
           speed = 0.0;
-          cadence = 0;
-          power = 0;
-          isAutoPaused = true;
-          autoPauseBanner.textContent = 'DIAM / AUTO-PAUSED (0.0 KM/H)';
-          autoPauseBanner.style.display = 'block';
-
           lastLat = null;
           lastLon = null;
           lastGpsTimestamp = null;
@@ -1113,15 +1372,11 @@
                 ascent = pos.coords.altitude;
               }
 
-              // First GPS fix: anchor position and remain stationary at 0 km/h
               if (lastLat === null || lastLon === null || lastGpsTimestamp === null) {
                 lastLat = curLat;
                 lastLon = curLon;
                 lastGpsTimestamp = now;
                 speed = 0.0;
-                isAutoPaused = true;
-                autoPauseBanner.textContent = 'DIAM / AUTO-PAUSED (0.0 KM/H)';
-                autoPauseBanner.style.display = 'block';
                 gpsBadge.querySelector('span').textContent = `GPS HP AKTIF (±${Math.round(accuracy)}m)`;
                 updateUI();
                 return;
@@ -1129,7 +1384,7 @@
 
               const dt = Math.max(0.2, (now - lastGpsTimestamp) / 1000.0);
 
-              // Calculate Haversine step displacement
+              // Calculate Haversine displacement
               const dLat = (curLat - lastLat) * Math.PI / 180;
               const dLon = (curLon - lastLon) * Math.PI / 180;
               const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
@@ -1138,48 +1393,25 @@
               const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
               const stepMeters = 6371000 * c;
 
-              // STATIONARY DEADBAND FILTER (Zero-Velocity Update / ZUPT)
-              // If GPS displacement is smaller than jitter noise threshold, lock speed to 0.0
-              const jitterThresholdMeters = Math.max(3.5, accuracy * 0.4);
-
-              if (stepMeters < jitterThresholdMeters) {
-                // User is standing still / stationary!
+              // Gentle filter: displacement >= 0.7m registers walking/running movement immediately!
+              if (stepMeters < 0.7 && (!pos.coords.speed || pos.coords.speed < 0.2)) {
                 speed = 0.0;
-                isAutoPaused = true;
-                autoPauseBanner.textContent = 'DIAM / AUTO-PAUSED (0.0 KM/H)';
-                autoPauseBanner.style.display = 'block';
-                // Do NOT update lastLat/lastLon to avoid accumulating random-walk drift
               } else {
-                // Legitimate movement detected
                 let calcSpeedKmh = (stepMeters / dt) * 3.6;
-
-                // Priority to Doppler speed from GPS hardware if available
-                if (pos.coords.speed !== null && !isNaN(pos.coords.speed) && pos.coords.speed >= 0.6) {
+                if (pos.coords.speed !== null && !isNaN(pos.coords.speed) && pos.coords.speed >= 0.2) {
                   speed = pos.coords.speed * 3.6;
                 } else {
                   speed = calcSpeedKmh;
                 }
 
-                if (speed >= 2.5) {
-                  // User is actually moving
-                  distance += (stepMeters / 1000.0);
-                  lastLat = curLat;
-                  lastLon = curLon;
-                  lastGpsTimestamp = now;
-                  isAutoPaused = false;
-                  autoPauseBanner.style.display = 'none';
-                } else {
-                  // Residual noise
-                  speed = 0.0;
-                  isAutoPaused = true;
-                  autoPauseBanner.textContent = 'DIAM / AUTO-PAUSED (0.0 KM/H)';
-                  autoPauseBanner.style.display = 'block';
-                }
+                distance += (stepMeters / 1000.0);
+                lastLat = curLat;
+                lastLon = curLon;
+                lastGpsTimestamp = now;
               }
 
               gpsBadge.querySelector('span').textContent = `GPS HP AKTIF (±${Math.round(accuracy)}m)`;
 
-              // Update Leaflet map to real rider position
               if (riderMarker) {
                 riderMarker.setLatLng([curLat, curLon]);
                 if (leafletMap) leafletMap.panTo([curLat, curLon], { animate: true });
@@ -1194,7 +1426,7 @@
             },
             { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
           );
-          alert('Mode GPS Nyata HP Aktif!\nSaat Anda diam, kecepatan akan terkunci di 0.0 km/h (Auto-Paused). Silakan bawa HP bergerak/bersepeda untuk melihat angka naik.');
+          alert('Mode GPS Nyata HP Aktif!\nBebas auto-pause: Anda bisa jalan kaki atau gowes santai, pace & jarak akan langsung tercatat akurat.');
         } else {
           alert('Geolocation API tidak didukung di peramban ini.');
         }
@@ -1202,10 +1434,250 @@
         navigator.geolocation.clearWatch(realGpsWatchId);
         realGpsWatchId = null;
         gpsBadge.querySelector('span').textContent = 'GPS FIX (±2.5m)';
-        autoPauseBanner.style.display = 'none';
         alert('Kembali ke mode simulasi.');
       }
     });
+
+    // ==========================================
+    // PROFILE MODAL FUNCTIONS
+    // ==========================================
+    const profileModal = document.getElementById('profileModal');
+    document.getElementById('btnOpenProfile').addEventListener('click', openProfileModal);
+
+    function openProfileModal() {
+      document.getElementById('profName').value = userProfile.name;
+      document.getElementById('profAge').value = userProfile.age;
+      document.getElementById('profGender').value = userProfile.gender;
+      document.getElementById('profWeight').value = userProfile.weightKg;
+      document.getElementById('profHeight').value = userProfile.heightCm;
+      document.getElementById('profRestingHr').value = userProfile.restingHr;
+      document.getElementById('profCustomMaxHr').value = userProfile.customMaxHr || '';
+      renderZonesTable();
+      profileModal.classList.add('active');
+    }
+
+    function closeProfileModal() {
+      profileModal.classList.remove('active');
+    }
+
+    function renderZonesTable() {
+      const age = parseInt(document.getElementById('profAge').value) || 28;
+      const customMax = parseInt(document.getElementById('profCustomMaxHr').value);
+      const maxHr = (customMax && customMax > 100) ? customMax : Math.round(208 - (0.7 * age));
+
+      const z1Max = Math.round(maxHr * 0.60);
+      const z2Max = Math.round(maxHr * 0.70);
+      const z3Max = Math.round(maxHr * 0.80);
+      const z4Max = Math.round(maxHr * 0.90);
+
+      const html = `
+        <tr><td><span style="color:#64b5f6; font-weight:800;">Z1</span> Recovery</td><td>&lt; 60%</td><td>&lt; ${z1Max} BPM</td></tr>
+        <tr><td><span style="color:#00e5ff; font-weight:800;">Z2</span> Endurance (Fat Burn)</td><td>60 - 70%</td><td>${z1Max} - ${z2Max} BPM</td></tr>
+        <tr><td><span style="color:#00e676; font-weight:800;">Z3</span> Tempo (Aerobic)</td><td>70 - 80%</td><td>${z2Max} - ${z3Max} BPM</td></tr>
+        <tr><td><span style="color:#ffb300; font-weight:800;">Z4</span> Threshold (Lactate)</td><td>80 - 90%</td><td>${z3Max} - ${z4Max} BPM</td></tr>
+        <tr><td><span style="color:#ff1744; font-weight:800;">Z5</span> VO2 Max (Anaerobic)</td><td>&gt; 90%</td><td>&gt; ${z4Max} BPM</td></tr>
+      `;
+      document.getElementById('zonesTableBody').innerHTML = html;
+    }
+
+    document.getElementById('profAge').addEventListener('input', renderZonesTable);
+    document.getElementById('profCustomMaxHr').addEventListener('input', renderZonesTable);
+
+    function saveProfile() {
+      userProfile.name = document.getElementById('profName').value.trim() || 'Atlet CycloEdge';
+      userProfile.age = parseInt(document.getElementById('profAge').value) || 28;
+      userProfile.gender = document.getElementById('profGender').value;
+      userProfile.weightKg = parseFloat(document.getElementById('profWeight').value) || 70.0;
+      userProfile.heightCm = parseFloat(document.getElementById('profHeight').value) || 175;
+      userProfile.restingHr = parseInt(document.getElementById('profRestingHr').value) || 60;
+      const customMax = parseInt(document.getElementById('profCustomMaxHr').value);
+      userProfile.customMaxHr = (customMax && customMax > 100) ? customMax : null;
+
+      try {
+        localStorage.setItem('cycloedge_preview_profile', JSON.stringify(userProfile));
+      } catch(e) {}
+
+      closeProfileModal();
+      updateUI();
+      alert(`Profil atlet dan 5 Zona Detak Jantung berhasil disimpan!\nMax HR: ${getMaxHr()} BPM`);
+    }
+
+    // ==========================================
+    // STRAVA SHARE MODAL FUNCTIONS
+    // ==========================================
+    const shareModal = document.getElementById('shareModal');
+    let selectedShareTemplate = 0;
+    document.getElementById('btnOpenShare').addEventListener('click', openShareModal);
+
+    function openShareModal() {
+      const actTitle = currentActivity === 'walking' ? 'Jalan Santai Pagi' : (currentActivity === 'running' ? 'Lari Sore' : 'Gowes Dago Pakar');
+      document.getElementById('shareTitle').value = `${actTitle} bersama CycloEdge`;
+      renderShareCard();
+      shareModal.classList.add('active');
+    }
+
+    function closeShareModal() {
+      shareModal.classList.remove('active');
+    }
+
+    function switchShareTemplate(idx) {
+      selectedShareTemplate = idx;
+      document.querySelectorAll('.share-tab-btn').forEach((b, i) => {
+        b.classList.toggle('active', i === idx);
+      });
+      renderShareCard();
+    }
+
+    function generateSvgPolyline(coords, strokeColor = '#fc4c02') {
+      if (!coords || coords.length < 2) {
+        return `<div style="text-align:center; padding:30px; color:#666;">Route outline preview</div>`;
+      }
+      let minLat = coords[0][0], maxLat = coords[0][0];
+      let minLon = coords[0][1], maxLon = coords[0][1];
+      coords.forEach(pt => {
+        if (pt[0] < minLat) minLat = pt[0];
+        if (pt[0] > maxLat) maxLat = pt[0];
+        if (pt[1] < minLon) minLon = pt[1];
+        if (pt[1] > maxLon) maxLon = pt[1];
+      });
+
+      const dLat = (maxLat - minLat) || 0.001;
+      const dLon = (maxLon - minLon) || 0.001;
+      const w = 320, h = 140;
+      const pad = 16;
+      const scaleX = (w - pad*2) / dLon;
+      const scaleY = (h - pad*2) / dLat;
+      const scale = Math.min(scaleX, scaleY);
+      const offX = pad + ((w - pad*2) - (dLon * scale)) / 2;
+      const offY = pad + ((h - pad*2) - (dLat * scale)) / 2;
+
+      let pointsStr = '';
+      coords.forEach(pt => {
+        const x = offX + (pt[1] - minLon) * scale;
+        const y = offY + (maxLat - pt[0]) * scale;
+        pointsStr += `${x.toFixed(1)},${y.toFixed(1)} `;
+      });
+
+      return `
+        <svg width="100%" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;">
+          <polyline fill="none" stroke="${strokeColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points="${pointsStr}" />
+        </svg>
+      `;
+    }
+
+    function renderShareCard() {
+      const container = document.getElementById('shareCardContainer');
+      const title = document.getElementById('shareTitle').value;
+      const hrs = Math.floor(elapsedSeconds / 3600);
+      const mins = Math.floor((elapsedSeconds % 3600) / 60);
+      const secs = elapsedSeconds % 60;
+      const durStr = (hrs > 0 ? `${hrs}h ` : '') + `${mins}m ${secs}s`;
+      const paceStr = getFormattedPace(speed);
+      const nowStr = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+
+      if (selectedShareTemplate === 0) {
+        // 1. Strava Classic (Orange & Slate)
+        container.innerHTML = `
+          <div style="background:#1c1c1e; border-radius:14px; padding:16px; border:1px solid #333; color:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <div>
+                <div style="font-weight:800; font-size:14px;">${userProfile.name}</div>
+                <div style="font-size:10px; color:#888;">${nowStr}</div>
+              </div>
+              <span style="background:rgba(252,76,2,0.2); color:#fc4c02; font-size:9px; font-weight:900; padding:3px 8px; border-radius:6px;">CYCLOEDGE</span>
+            </div>
+            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">${title}</div>
+            <div style="background:#121214; border-radius:10px; overflow:hidden; margin-bottom:12px;">
+              ${generateSvgPolyline(activeRouteCoords, '#fc4c02')}
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; text-align:left;">
+              <div><div style="font-size:8px; color:#888;">JARAK</div><div style="font-size:15px; font-weight:900;">${distance.toFixed(2)} <span style="font-size:9px;">km</span></div></div>
+              <div><div style="font-size:8px; color:#888;">WAKTU</div><div style="font-size:15px; font-weight:900;">${durStr}</div></div>
+              <div><div style="font-size:8px; color:#888;">PACE</div><div style="font-size:15px; font-weight:900;">${paceStr}</div></div>
+              <div><div style="font-size:8px; color:#888;">ELEVASI</div><div style="font-size:15px; font-weight:900;">${Math.round(ascent)} <span style="font-size:9px;">m</span></div></div>
+            </div>
+            <div style="margin-top:10px; padding-top:8px; border-top:1px solid #282828; display:flex; justify-content:space-between; font-size:10px; color:#aaa;">
+              <span>🔥 ${calories} kcal</span>
+              <span>❤️ Avg ${heartRate} bpm</span>
+            </div>
+          </div>
+        `;
+      } else if (selectedShareTemplate === 1) {
+        // 2. AMOLED Cyberpunk (Neon Cyan & Green)
+        container.innerHTML = `
+          <div style="background:#000; border-radius:14px; padding:16px; border:1.5px solid #00e5ff; color:#fff; box-shadow:0 0 20px rgba(0,229,255,0.2);">
+            <div style="display:flex; justify-content:space-between; font-size:9px; font-weight:900; color:#00e5ff; letter-spacing:1px; margin-bottom:8px;">
+              <span>● CYCLOEDGE TELEMETRY</span>
+              <span style="color:#888;">${nowStr}</span>
+            </div>
+            <div style="font-size:16px; font-weight:900; color:#fff; letter-spacing:0.5px; margin-bottom:10px;">${title.toUpperCase()}</div>
+            <div style="background:#0a0a0a; border-radius:10px; overflow:hidden; border:1px solid #222; margin-bottom:12px;">
+              ${generateSvgPolyline(activeRouteCoords, '#00e5ff')}
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div style="background:#111; padding:8px; border-radius:6px; border:1px solid #222;"><div style="font-size:8px; color:#888;">DISTANCE</div><div style="font-size:18px; font-weight:900; color:#00e5ff;">${distance.toFixed(2)} KM</div></div>
+              <div style="background:#111; padding:8px; border-radius:6px; border:1px solid #222;"><div style="font-size:8px; color:#888;">DURATION</div><div style="font-size:18px; font-weight:900; color:#fff;">${durStr}</div></div>
+              <div style="background:#111; padding:8px; border-radius:6px; border:1px solid #222;"><div style="font-size:8px; color:#888;">SPEED / PACE</div><div style="font-size:18px; font-weight:900; color:#00e676;">${speed.toFixed(1)} KM/H</div></div>
+              <div style="background:#111; padding:8px; border-radius:6px; border:1px solid #222;"><div style="font-size:8px; color:#888;">CALORIES</div><div style="font-size:18px; font-weight:900; color:#ffb300;">${calories} KCAL</div></div>
+            </div>
+          </div>
+        `;
+      } else if (selectedShareTemplate === 2) {
+        // 3. Minimalist Modern
+        container.innerHTML = `
+          <div style="background:#141417; border-radius:16px; padding:20px; border:1px solid #333; color:#fff;">
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:#888; letter-spacing:1px; margin-bottom:12px;">
+              <span>${userProfile.name.toUpperCase()}</span>
+              <span style="color:#fff; font-weight:900;">CYCLOEDGE</span>
+            </div>
+            <div style="font-size:42px; font-weight:900; letter-spacing:-1.5px; line-height:1;">${distance.toFixed(2)} <span style="font-size:14px; color:#888; font-weight:bold;">KM</span></div>
+            <div style="font-size:13px; color:#aaa; margin-bottom:14px;">${title}</div>
+            <div style="background:#1c1c20; border-radius:10px; overflow:hidden; margin-bottom:14px;">
+              ${generateSvgPolyline(activeRouteCoords, '#ffffff')}
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888;">
+              <div>WAKTU: <strong style="color:#fff;">${durStr}</strong></div>
+              <div>PACE: <strong style="color:#fff;">${paceStr}</strong></div>
+              <div>KALORI: <strong style="color:#fff;">${calories} kcal</strong></div>
+            </div>
+          </div>
+        `;
+      } else {
+        // 4. Story 9:16 (Vertical)
+        container.innerHTML = `
+          <div style="background:linear-gradient(180deg, #181822 0%, #08080c 100%); border-radius:16px; padding:20px 16px; border:1px solid #333; color:#fff; text-align:center;">
+            <span style="background:rgba(252,76,2,0.2); color:#fc4c02; font-size:9px; font-weight:900; padding:3px 10px; border-radius:12px; letter-spacing:1px;">CYCLOEDGE WORKOUT</span>
+            <div style="font-size:18px; font-weight:900; margin-top:8px;">${title}</div>
+            <div style="font-size:10px; color:#888; margin-bottom:12px;">${nowStr}</div>
+            <div style="background:rgba(0,0,0,0.5); border-radius:12px; overflow:hidden; margin-bottom:14px; border:1px solid #222;">
+              ${generateSvgPolyline(activeRouteCoords, '#00e5ff')}
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div style="background:rgba(255,255,255,0.06); padding:8px; border-radius:8px;"><div style="font-size:8px; color:#888;">DISTANCE</div><div style="font-size:18px; font-weight:900; color:#00e5ff;">${distance.toFixed(2)} km</div></div>
+              <div style="background:rgba(255,255,255,0.06); padding:8px; border-radius:8px;"><div style="font-size:8px; color:#888;">TIME</div><div style="font-size:18px; font-weight:900;">${durStr}</div></div>
+              <div style="background:rgba(255,255,255,0.06); padding:8px; border-radius:8px;"><div style="font-size:8px; color:#888;">PACE</div><div style="font-size:18px; font-weight:900; color:#00e676;">${paceStr}</div></div>
+              <div style="background:rgba(255,255,255,0.06); padding:8px; border-radius:8px;"><div style="font-size:8px; color:#888;">BURN</div><div style="font-size:18px; font-weight:900; color:#ffb300;">${calories} kcal</div></div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    document.getElementById('shareTitle').addEventListener('input', renderShareCard);
+
+    function doShareActivity() {
+      const title = document.getElementById('shareTitle').value;
+      const text = `${title} • ${distance.toFixed(2)} km bersama CycloEdge! (Avg ${heartRate} bpm, ${calories} kcal)`;
+      if (navigator.share) {
+        navigator.share({ title: title, text: text, url: window.location.href }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(text).then(() => {
+          alert('Teks ringkasan aktivitas berhasil disalin ke clipboard!\n\n' + text);
+        }).catch(() => {
+          alert(text);
+        });
+      }
+    }
 
     // Web Bluetooth Heart Rate Connection (COROS Broadcast HR / Chest Strap)
     const btnConnectBleHr = document.getElementById('btnConnectBleHr');

@@ -6,41 +6,51 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/telemetry_data.dart';
 import 'ble_service.dart';
+import 'profile_service.dart';
 
 class LocationService extends ChangeNotifier {
-  static const double autoPauseThresholdKmh = 2.0; // km/h
-  static const double deadbandSpeedThresholdMs = 0.55; // ~2.0 km/h
-  static const double deadbandDistanceMeters = 2.5; // ignore GPS jitter < 2.5m
-  static const double elevationGainThresholdMeters = 1.5; // vertical filter
+  // Gentle jitter filter: only ignore GPS micro-drift under 0.6 meters & < 0.5 km/h
+  static const double stationaryJitterDistanceM = 0.6;
+  static const double stationaryJitterSpeedMs = 0.15; // ~0.5 km/h
+  static const double elevationGainThresholdMeters = 1.0; // 1m vertical resolution
 
   final BleService _bleService;
+  final ProfileService? _profileService;
   StreamSubscription<Position>? _positionSubscription;
   Timer? _oneSecondTimer;
 
   TelemetryData _telemetry = const TelemetryData();
   final List<LatLng> _breadcrumbs = [];
+  final List<int> _hrHistory = [];
 
   Position? _lastPosition;
   double _lastValidElevation = 0.0;
   DateTime? _rideStartTime;
-  bool _autoPauseEnabled = true;
 
   TelemetryData get telemetry => _telemetry;
-  bool get autoPauseEnabled => _autoPauseEnabled;
 
-  LocationService({required BleService bleService}) : _bleService = bleService {
+  LocationService({
+    required BleService bleService,
+    ProfileService? profileService,
+  })  : _bleService = bleService,
+        _profileService = profileService {
     _bleService.addListener(_onBleUpdate);
     _initLocation();
   }
 
-  void setAutoPause(bool enabled) {
-    _autoPauseEnabled = enabled;
+  void setActivityType(String type) {
+    _telemetry = _telemetry.copyWith(activityType: type);
     notifyListeners();
   }
 
   void _onBleUpdate() {
+    final hr = _bleService.heartRate;
+    if (_telemetry.isRecording && !_telemetry.isPaused && hr > 30) {
+      _hrHistory.add(hr);
+    }
+
     _telemetry = _telemetry.copyWith(
-      heartRate: _bleService.heartRate,
+      heartRate: hr,
       cadence: _bleService.cadence,
       power: _bleService.power,
     );
@@ -67,7 +77,7 @@ class LocationService extends ChangeNotifier {
         return false;
       }
 
-      // Configure iOS & Android background navigation settings
+      // Configure iOS & Android high-accuracy sports tracking
       LocationSettings locationSettings;
       if (Platform.isIOS) {
         locationSettings = AppleSettings(
@@ -84,7 +94,7 @@ class LocationService extends ChangeNotifier {
           distanceFilter: 1,
           foregroundNotificationConfig: const ForegroundNotificationConfig(
             notificationTitle: "CycloEdge GPS Tracker",
-            notificationText: "Tracking your cycling ride in background",
+            notificationText: "Tracking your workout in background",
             enableWakeLock: true,
           ),
         );
@@ -110,7 +120,6 @@ class LocationService extends ChangeNotifier {
     final currentCoord = LatLng(pos.latitude, pos.longitude);
     double filteredSpeedKmh = 0.0;
 
-    // Apply Stationary Deadband Filter (ZUPT)
     if (_lastPosition != null) {
       final double distanceM = Geolocator.distanceBetween(
         _lastPosition!.latitude,
@@ -119,16 +128,24 @@ class LocationService extends ChangeNotifier {
         pos.longitude,
       );
 
-      // Raw speed from GPS chip (in m/s)
-      final rawSpeedMs = pos.speed >= 0 ? pos.speed : 0.0;
+      final dtMs = pos.timestamp.difference(_lastPosition!.timestamp).inMilliseconds;
+      final dtSec = dtMs > 0 ? dtMs / 1000.0 : 1.0;
 
-      if (rawSpeedMs < deadbandSpeedThresholdMs || distanceM < deadbandDistanceMeters) {
-        // Stationary: clamp speed to 0 to prevent GPS drift
+      // Speed directly from GPS chip (in m/s)
+      double rawSpeedMs = pos.speed >= 0 ? pos.speed : 0.0;
+
+      // If hardware speed is zero or low, but distance moved is significant, calculate from distance/time
+      if (rawSpeedMs < 0.2 && distanceM > 0.6 && dtSec > 0.3) {
+        rawSpeedMs = distanceM / dtSec;
+      }
+
+      // Suppress stationary GPS jitter (standing still)
+      if (distanceM < stationaryJitterDistanceM && rawSpeedMs < stationaryJitterSpeedMs) {
         filteredSpeedKmh = 0.0;
       } else {
         filteredSpeedKmh = rawSpeedMs * 3.6; // convert m/s to km/h
 
-        // Accumulate distance only when actively recording and moving
+        // Accumulate distance when actively recording and not paused
         if (_telemetry.isRecording && !_telemetry.isPaused) {
           final newDist = _telemetry.distanceKm + (distanceM / 1000.0);
           _breadcrumbs.add(currentCoord);
@@ -158,14 +175,6 @@ class LocationService extends ChangeNotifier {
 
     _lastPosition = pos;
 
-    // Auto-Pause logic
-    bool shouldAutoPause = false;
-    if (_telemetry.isRecording && _autoPauseEnabled) {
-      if (filteredSpeedKmh < autoPauseThresholdKmh) {
-        shouldAutoPause = true;
-      }
-    }
-
     // Max speed tracking
     final newMaxSpeed = math.max(_telemetry.maxSpeed, filteredSpeedKmh);
 
@@ -175,19 +184,19 @@ class LocationService extends ChangeNotifier {
       elevation: pos.altitude,
       currentPosition: currentCoord,
       heading: pos.heading >= 0 ? pos.heading : 0.0,
-      isAutoPaused: shouldAutoPause,
     );
 
     notifyListeners();
   }
 
-  /// Start or resume ride recording
+  /// Start or resume workout recording
   void startRecording() {
     if (_telemetry.rideState == RideState.recording) return;
 
     if (_telemetry.rideState == RideState.idle) {
       _rideStartTime = DateTime.now();
       _breadcrumbs.clear();
+      _hrHistory.clear();
       _telemetry = _telemetry.copyWith(
         distanceKm: 0.0,
         elevationGain: 0.0,
@@ -197,6 +206,7 @@ class LocationService extends ChangeNotifier {
         movingTime: Duration.zero,
         rideState: RideState.recording,
         breadcrumbs: [],
+        calories: 0,
       );
     } else {
       _telemetry = _telemetry.copyWith(rideState: RideState.recording);
@@ -207,12 +217,7 @@ class LocationService extends ChangeNotifier {
       if (_telemetry.rideState != RideState.recording) return;
 
       final newElapsed = _telemetry.elapsedTime + const Duration(seconds: 1);
-      Duration newMoving = _telemetry.movingTime;
-
-      // Only advance moving time if not auto-paused
-      if (!_telemetry.isAutoPaused) {
-        newMoving += const Duration(seconds: 1);
-      }
+      final newMoving = _telemetry.movingTime + const Duration(seconds: 1);
 
       // Calculate Average Speed
       double newAvg = 0.0;
@@ -220,10 +225,29 @@ class LocationService extends ChangeNotifier {
         newAvg = (_telemetry.distanceKm / (newMoving.inSeconds / 3600.0));
       }
 
+      // Calculate Calories dynamically
+      int calculatedCals = _telemetry.calories;
+      if (_profileService != null) {
+        int avgHr = 0;
+        if (_hrHistory.isNotEmpty) {
+          avgHr = (_hrHistory.reduce((a, b) => a + b) / _hrHistory.length).round();
+        } else if (_telemetry.heartRate > 30) {
+          avgHr = _telemetry.heartRate;
+        }
+
+        calculatedCals = _profileService.profile.calculateCalories(
+          duration: newMoving,
+          avgHr: avgHr,
+          activityType: _telemetry.activityType,
+          distanceKm: _telemetry.distanceKm,
+        ).round();
+      }
+
       _telemetry = _telemetry.copyWith(
         elapsedTime: newElapsed,
         movingTime: newMoving,
         avgSpeed: newAvg,
+        calories: calculatedCals,
       );
       notifyListeners();
     });
@@ -231,19 +255,19 @@ class LocationService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pause recording
+  /// Pause recording manually
   void pauseRecording() {
     _telemetry = _telemetry.copyWith(rideState: RideState.paused);
     notifyListeners();
   }
 
-  /// Reset ride data
+  /// Reset workout data
   void stopAndResetRide() {
     _oneSecondTimer?.cancel();
     _breadcrumbs.clear();
+    _hrHistory.clear();
     _telemetry = _telemetry.copyWith(
       rideState: RideState.idle,
-      isAutoPaused: false,
       distanceKm: 0.0,
       elevationGain: 0.0,
       maxSpeed: 0.0,
@@ -251,11 +275,17 @@ class LocationService extends ChangeNotifier {
       elapsedTime: Duration.zero,
       movingTime: Duration.zero,
       breadcrumbs: [],
+      calories: 0,
     );
     notifyListeners();
   }
 
   DateTime? get rideStartTime => _rideStartTime;
+
+  int get averageHeartRate {
+    if (_hrHistory.isEmpty) return _telemetry.heartRate;
+    return (_hrHistory.reduce((a, b) => a + b) / _hrHistory.length).round();
+  }
 
   @override
   void dispose() {
@@ -265,4 +295,3 @@ class LocationService extends ChangeNotifier {
     super.dispose();
   }
 }
-

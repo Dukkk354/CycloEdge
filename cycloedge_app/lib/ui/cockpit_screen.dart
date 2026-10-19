@@ -5,23 +5,32 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../models/activity_record.dart';
 import '../models/route_data.dart';
 import '../models/telemetry_data.dart';
+import '../models/user_profile.dart';
+import '../services/activity_service.dart';
 import '../services/ble_service.dart';
 import '../services/gpx_service.dart';
 import '../services/location_service.dart';
+import '../services/profile_service.dart';
 import 'sensor_modal.dart';
+import 'share/activity_share_screen.dart';
 import 'widgets/map_view_widget.dart';
 import 'widgets/rain_lock_overlay.dart';
 
 class CockpitScreen extends StatefulWidget {
   final LocationService locationService;
   final BleService bleService;
+  final ActivityService? activityService;
+  final ProfileService? profileService;
 
   const CockpitScreen({
     super.key,
     required this.locationService,
     required this.bleService,
+    this.activityService,
+    this.profileService,
   });
 
   @override
@@ -33,6 +42,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   bool _isRainLocked = false;
   bool _isMapFullscreen = false;
   int _currentLap = 1;
+  bool _preferPace = false; // Toggle between Speed (km/h) and Pace (min/km)
 
   @override
   Widget build(BuildContext context) {
@@ -77,18 +87,15 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   // ==========================================
-  // 1. PORTRAIT LAYOUT (Matches preview.html)
+  // 1. PORTRAIT LAYOUT
   // ==========================================
   Widget _buildPortraitLayout(TelemetryData telemetry, int connectedCount) {
     return Column(
       children: [
-        // Auto Pause Red Banner
-        if (telemetry.isAutoPaused) _buildAutoPauseBanner(),
-
-        // Top Status Bar (GPS FIX, Time, Lap, BLE, GPX, Lock)
+        // Top Status Bar (GPS FIX, Time, Lap, BLE, GPX, Activity Mode)
         _buildTopStatusBar(telemetry, connectedCount),
 
-        // Map Area on TOP (Takes 36% of screen height)
+        // Map Area on TOP (Takes ~36% of screen height)
         Expanded(
           flex: 36,
           child: Padding(
@@ -106,7 +113,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ),
         ),
 
-        // Metric Grid on BOTTOM (Takes remaining ~52% of height)
+        // Metric Grid on BOTTOM (Takes remaining height)
         Expanded(
           flex: 54,
           child: Padding(
@@ -122,7 +129,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   // ==========================================
-  // 2. LANDSCAPE LAYOUT (BIG EXPANSIVE MAP)
+  // 2. LANDSCAPE LAYOUT (HUGE 60% MAP)
   // ==========================================
   Widget _buildLandscapeLayout(TelemetryData telemetry, int connectedCount) {
     return Row(
@@ -152,8 +159,6 @@ class _CockpitScreenState extends State<CockpitScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Column(
               children: [
-                if (telemetry.isAutoPaused) _buildAutoPauseBanner(),
-
                 // Compact Status Bar
                 _buildTopStatusBar(telemetry, connectedCount, isCompact: true),
 
@@ -178,6 +183,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
   // 3. FULLSCREEN MAP MODE
   // ==========================================
   Widget _buildFullscreenMap(TelemetryData telemetry) {
+    final showPace = _preferPace || telemetry.activityType != 'cycling';
+
     return Stack(
       children: [
         MapViewWidget(
@@ -208,9 +215,12 @@ class _CockpitScreenState extends State<CockpitScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('SPEED', style: TextStyle(color: Colors.white54, fontSize: 9)),
                     Text(
-                      telemetry.speed.toStringAsFixed(1),
+                      showPace ? 'PACE' : 'SPEED',
+                      style: const TextStyle(color: Colors.white54, fontSize: 9),
+                    ),
+                    Text(
+                      showPace ? telemetry.formattedPace : telemetry.speed.toStringAsFixed(1),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -258,26 +268,8 @@ class _CockpitScreenState extends State<CockpitScreen> {
   }
 
   // ==========================================
-  // 4. UI COMPONENTS (Identical to preview.html)
+  // 4. UI COMPONENTS
   // ==========================================
-
-  Widget _buildAutoPauseBanner() {
-    return Container(
-      width: double.infinity,
-      color: const Color(0xFFFF1744),
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: const Text(
-        'AUTO-PAUSED (KECEPATAN < 2 KM/H)',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.0,
-        ),
-      ),
-    );
-  }
 
   Widget _buildTopStatusBar(TelemetryData telemetry, int connectedCount, {bool isCompact = false}) {
     final hours = telemetry.movingTime.inHours.toString().padLeft(2, '0');
@@ -293,7 +285,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // GPS Badge
+          // GPS Badge & Activity Selector
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -309,7 +301,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
               ),
               const SizedBox(width: 5),
               Text(
-                telemetry.currentPosition != null ? 'GPS FIX' : 'SEARCHING',
+                telemetry.currentPosition != null ? 'GPS FIX' : 'SEARCH',
                 style: TextStyle(
                   color: telemetry.currentPosition != null
                       ? const Color(0xFF00E676)
@@ -318,10 +310,46 @@ class _CockpitScreenState extends State<CockpitScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(width: 8),
+
+              // Activity Switcher Chip (Tap to cycle 🚴 -> 🏃 -> 🚶)
+              GestureDetector(
+                onTap: _cycleActivityType,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E1E),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        telemetry.activityType == 'walking'
+                            ? Icons.directions_walk
+                            : telemetry.activityType == 'running'
+                                ? Icons.directions_run
+                                : Icons.directions_bike,
+                        size: 11,
+                        color: const Color(0xFF00E5FF),
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        telemetry.activityType.toUpperCase(),
+                        style: const TextStyle(
+                          color: Color(0xFF00E5FF),
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
 
-          // Time Badge (Centered)
+          // Moving Time Badge (Centered)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
             decoration: BoxDecoration(
@@ -340,7 +368,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
             ),
           ),
 
-          // LAP & SENSORS
+          // LAP, SENSORS & GPX
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -424,25 +452,50 @@ class _CockpitScreenState extends State<CockpitScreen> {
     );
   }
 
-  /// 3-Row Metric Grid (Exact structure from preview.html)
+  void _cycleActivityType() {
+    final current = widget.locationService.telemetry.activityType;
+    String next = 'cycling';
+    if (current == 'cycling') {
+      next = 'running';
+    } else if (current == 'running') {
+      next = 'walking';
+    } else {
+      next = 'cycling';
+    }
+    widget.locationService.setActivityType(next);
+  }
+
+  /// 3-Row Metric Grid (Dynamic Pace & Speed based on activity)
   Widget _buildMetricGrid(TelemetryData telemetry, {required bool isLandscape}) {
+    final isRunOrWalk = telemetry.activityType != 'cycling';
+    final showPaceAsPrimary = _preferPace || isRunOrWalk;
+
     return Column(
       children: [
-        // Row 1: Kecepatan & Jarak
+        // Row 1: Primary Speed/Pace & Jarak
         Expanded(
           flex: isLandscape ? 10 : 12,
           child: Row(
             children: [
               Expanded(
                 flex: 12,
-                child: _buildMetricCard(
-                  title: 'KECEPATAN',
-                  badgeText: 'LIVE 1Hz',
-                  badgeColor: const Color(0xFF00E676),
-                  valueText: telemetry.speed.toStringAsFixed(1),
-                  unitText: 'km/h',
-                  isHuge: true,
-                  valueColor: Colors.white,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _preferPace = !_preferPace);
+                  },
+                  child: _buildMetricCard(
+                    title: showPaceAsPrimary ? 'PACE (TAP UBAH)' : 'KECEPATAN (TAP UBAH)',
+                    badgeText: showPaceAsPrimary
+                        ? 'AVG ${telemetry.formattedAvgPace}'
+                        : 'LIVE 1Hz',
+                    badgeColor: const Color(0xFF00E676),
+                    valueText: showPaceAsPrimary
+                        ? telemetry.formattedPace
+                        : telemetry.speed.toStringAsFixed(1),
+                    unitText: showPaceAsPrimary ? '/km' : 'km/h',
+                    isHuge: true,
+                    valueColor: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -460,16 +513,20 @@ class _CockpitScreenState extends State<CockpitScreen> {
         ),
         const SizedBox(height: 6),
 
-        // Row 2: Kadens & Detak Jantung
+        // Row 2: Kadens / Pace Sekunder & Detak Jantung
         Expanded(
           flex: 10,
           child: Row(
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  title: 'KADENS',
-                  valueText: telemetry.cadence > 0 ? '${telemetry.cadence}' : '--',
-                  unitText: 'rpm',
+                  title: isRunOrWalk ? 'KECEPATAN' : 'KADENS',
+                  badgeText: isRunOrWalk ? 'AVG ${telemetry.avgSpeed.toStringAsFixed(1)}' : null,
+                  badgeColor: const Color(0xFF00E676),
+                  valueText: isRunOrWalk
+                      ? telemetry.speed.toStringAsFixed(1)
+                      : (telemetry.cadence > 0 ? '${telemetry.cadence}' : '--'),
+                  unitText: isRunOrWalk ? 'km/h' : 'rpm',
                   valueColor: const Color(0xFF00E676),
                 ),
               ),
@@ -489,18 +546,22 @@ class _CockpitScreenState extends State<CockpitScreen> {
         ),
         const SizedBox(height: 6),
 
-        // Row 3: Power (3s) & Total Ascent
+        // Row 3: Kalori / Power & Total Ascent
         Expanded(
           flex: 10,
           child: Row(
             children: [
               Expanded(
                 child: _buildMetricCard(
-                  title: 'POWER (3s)',
-                  badgeText: telemetry.power > 0 ? 'NP ${telemetry.power}W' : null,
+                  title: isRunOrWalk ? 'KALORI' : 'POWER (3s)',
+                  badgeText: isRunOrWalk
+                      ? 'KEYTEL'
+                      : (telemetry.power > 0 ? 'NP ${telemetry.power}W' : 'BURN ${telemetry.calories} kcal'),
                   badgeColor: const Color(0xFFFFB300),
-                  valueText: telemetry.power > 0 ? '${telemetry.power}' : '--',
-                  unitText: 'W',
+                  valueText: isRunOrWalk
+                      ? '${telemetry.calories}'
+                      : (telemetry.power > 0 ? '${telemetry.power}' : '${telemetry.calories}'),
+                  unitText: isRunOrWalk ? 'kcal' : (telemetry.power > 0 ? 'W' : 'kcal'),
                   valueColor: const Color(0xFFFFB300),
                 ),
               ),
@@ -674,7 +735,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
           ),
           const SizedBox(width: 6),
 
-          // 4. STOP & EXPORT BUTTON
+          // 4. STOP & FINISH BUTTON
           Expanded(
             flex: 2,
             child: _buildActionButton(
@@ -759,7 +820,7 @@ class _CockpitScreenState extends State<CockpitScreen> {
     try {
       final now = DateTime.now();
       final gpxContent = GpxService.exportToGpx(
-        activityName: 'CycloEdge Ride ${DateFormat('yyyy-MM-dd HH:mm').format(now)}',
+        activityName: 'CycloEdge ${telemetry.activityType.toUpperCase()} ${DateFormat('yyyy-MM-dd HH:mm').format(now)}',
         coordinates: telemetry.breadcrumbs,
         startTime: widget.locationService.rideStartTime ?? now,
         totalDistanceKm: telemetry.distanceKm,
@@ -785,20 +846,34 @@ class _CockpitScreenState extends State<CockpitScreen> {
     }
   }
 
+  // ==========================================
+  // 6. FINISH & SAVE WORKOUT DIALOG
+  // ==========================================
+
   void _showFinishDialog(TelemetryData telemetry) {
+    final actType = telemetry.activityType;
+    final actName = actType == 'walking'
+        ? 'Jalan Santai'
+        : actType == 'running'
+            ? 'Lari Sore'
+            : 'Gowes Sepeda';
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Selesai Gowes?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Selesai Olahraga?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Text(
           'Total Jarak: ${telemetry.distanceKm.toStringAsFixed(2)} km\n'
-          'Waktu Bergerak: ${telemetry.movingTime.inMinutes} menit\n'
-          'Kecepatan Rata-rata: ${telemetry.avgSpeed.toStringAsFixed(1)} km/h\n\n'
-          'Apakah Anda ingin mengekspor file GPX sebelum reset?',
+          'Waktu: ${telemetry.movingTime.inMinutes} menit\n'
+          'Kecepatan Rata2: ${telemetry.avgSpeed.toStringAsFixed(1)} km/h\n'
+          'Pace Rata2: ${telemetry.formattedAvgPace} /km\n'
+          'Kalori Terbakar: ${telemetry.calories} kcal\n\n'
+          'Simpan sesi ini untuk dibagikan dengan template kartu ala Strava?',
           style: const TextStyle(color: Colors.white70, height: 1.4),
         ),
         actions: [
+          // Buang (Discard)
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
@@ -807,18 +882,66 @@ class _CockpitScreenState extends State<CockpitScreen> {
             },
             child: const Text('Buang', style: TextStyle(color: Colors.redAccent)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00E5FF),
-              foregroundColor: Colors.black,
-            ),
+
+          // Ekspor GPX
+          TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
               await _exportRideGpx(telemetry);
               widget.locationService.stopAndResetRide();
               setState(() => _currentLap = 1);
             },
-            child: const Text('Ekspor & Simpan', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Ekspor GPX', style: TextStyle(color: Colors.white70)),
+          ),
+
+          // Simpan & Bagikan (Save & Open Strava Share Card)
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFC4C02), // Strava orange
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+
+              final newRecord = ActivityRecord(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                title: '$actName ${DateFormat('dd MMM').format(DateTime.now())}',
+                activityType: actType,
+                startTime: widget.locationService.rideStartTime ?? DateTime.now(),
+                movingTime: telemetry.movingTime,
+                elapsedTime: telemetry.elapsedTime,
+                distanceKm: telemetry.distanceKm,
+                avgSpeedKmh: telemetry.avgSpeed,
+                maxSpeedKmh: telemetry.maxSpeed,
+                avgPaceMinPerKm: telemetry.avgPaceMinutesPerKm,
+                elevationGainM: telemetry.elevationGain,
+                avgHr: widget.locationService.averageHeartRate,
+                maxHr: telemetry.heartRate,
+                calories: telemetry.calories,
+                breadcrumbs: List.from(telemetry.breadcrumbs),
+              );
+
+              if (widget.activityService != null) {
+                await widget.activityService!.saveActivity(newRecord);
+              }
+
+              widget.locationService.stopAndResetRide();
+              setState(() => _currentLap = 1);
+
+              if (mounted) {
+                final prof = widget.profileService?.profile ?? const UserProfile();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ActivityShareScreen(
+                      activity: newRecord,
+                      profile: prof,
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Simpan & Bagikan', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

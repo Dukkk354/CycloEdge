@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'services/activity_service.dart';
 import 'services/ble_service.dart';
 import 'services/location_service.dart';
-import 'ui/cockpit_screen.dart';
+import 'services/profile_service.dart';
+import 'ui/main_navigation_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,18 +41,27 @@ class CycloEdgeApp extends StatefulWidget {
 
 class _CycloEdgeAppState extends State<CycloEdgeApp> {
   late final BleService _bleService;
+  late final ProfileService _profileService;
+  late final ActivityService _activityService;
   late final LocationService _locationService;
 
   @override
   void initState() {
     super.initState();
     _bleService = BleService();
-    _locationService = LocationService(bleService: _bleService);
+    _profileService = ProfileService();
+    _activityService = ActivityService();
+    _locationService = LocationService(
+      bleService: _bleService,
+      profileService: _profileService,
+    );
   }
 
   @override
   void dispose() {
     _locationService.dispose();
+    _activityService.dispose();
+    _profileService.dispose();
     _bleService.dispose();
     super.dispose();
   }
@@ -71,9 +82,11 @@ class _CycloEdgeAppState extends State<CycloEdgeApp> {
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),
-      home: CockpitScreen(
+      home: MainNavigationShell(
         locationService: _locationService,
         bleService: _bleService,
+        activityService: _activityService,
+        profileService: _profileService,
       ),
     );
   }
